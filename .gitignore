@@ -1,0 +1,29 @@
+# ide
+**/.idea/
+**/.vscode/
+
+# dependencies
+**/node_modules
+**/.pnp
+**/.pnp.js
+**/log/
+
+# testing
+**/coverage
+
+# build outputs
+**/out/
+**/build
+**/dist
+
+# misc
+**/.DS_Store
+**/*.pem
+**/*.log
+
+# local env files
+**/.env
+**/.env.local
+**/.env.development.local
+**/.env.test.local
+**/.env.production.local
