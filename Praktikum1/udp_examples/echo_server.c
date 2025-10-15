@@ -30,6 +30,9 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdio.h>
+#include <arpa/inet.h>
+
+#include "Socket.h"
 
 #define BUFFER_SIZE (1<<16)
 
@@ -41,9 +44,7 @@ int main(void)
 	ssize_t len;
 	char buf[BUFFER_SIZE];
 
-	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-		perror("socket");
-	}
+	fd = Socket(AF_INET, SOCK_DGRAM, 0);
 
 	memset((void *) &server_addr, 0, sizeof(server_addr));
 	server_addr.sin_family = AF_INET;
@@ -52,22 +53,20 @@ int main(void)
 #endif
 	server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 	server_addr.sin_port = htons(7);
-	if (bind(fd, (const struct sockaddr *) &server_addr, sizeof(server_addr)) != 0) {
-		perror("bind");
-	}
+
+    // Loopback-Adresse
+    inet_aton("127.0.0.1", &server_addr.sin_addr);
+	Bind(fd, (const struct sockaddr *) &server_addr, sizeof(server_addr));
+
 
 	for (;;) {
 		addr_len = (socklen_t) sizeof(client_addr);
 		memset((void *) &client_addr, 0, sizeof(client_addr));
-		len = recvfrom(fd, (void *) buf, sizeof(buf), 0, (struct sockaddr *) &client_addr, &addr_len);
-		if (len < 0) {
-			perror("recvfrom");
-		} else {
-			sendto(fd, (const void *) buf, (size_t)len, 0, (struct sockaddr *)&client_addr, addr_len);
-		}
+		len = Recvfrom(fd, (void *) buf, sizeof(buf), 0,
+                       (struct sockaddr *) &client_addr, &addr_len);
+        Sendto(fd, (const void *) buf, (size_t)len, 0, (struct sockaddr *)&client_addr, addr_len);
 	}
-	if (close(fd) < 0)
-		perror("close");
 
+	Close(fd);
 	return(0);
 }
