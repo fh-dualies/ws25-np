@@ -15,6 +15,7 @@
 **/out/
 **/build
 **/dist
+**/cmake-build-debug
 
 # misc
 **/.DS_Store
