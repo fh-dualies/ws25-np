@@ -38,6 +38,11 @@
 
 int main(int argc, char **argv)
 {
+	if(argc != 2) {
+		fprintf(stderr, "Adress must be given!\n");
+		return 1;
+	}
+
 	int fd;
 	struct sockaddr_in server_addr, client_addr;
 	socklen_t addr_len;
