@@ -10,5 +10,8 @@ void Bind(int fd, const struct sockaddr *addr, socklen_t addrlen);
 ssize_t Sendto(int fd, const void *buf, size_t buflen, int flags, const struct sockaddr *to, socklen_t tolen);
 ssize_t Recvfrom(int fd, void *buf, size_t buflen, int flags, struct sockaddr *from, socklen_t *fromlen);
 void Close(int fd);
+void Connect(int fd, const struct sockaddr *addr, socklen_t addrlen);
+ssize_t Send(int fd, const void *buf, size_t buflen, int flags);
+ssize_t Recv(int fd, void *buf, size_t buflen, int flags);
 
 #endif

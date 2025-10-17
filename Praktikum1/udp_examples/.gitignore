@@ -22,3 +22,9 @@ Socket.o
 # Executables
 echo_client
 echo_server
+/COPYING
+/ChangeLog
+/AUTHORS
+/README
+/NEWS
+/INSTALL

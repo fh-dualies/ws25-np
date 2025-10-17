@@ -50,3 +50,33 @@ void Close(int fd)
         exit(SOCKET_ERR);
     }
 }
+
+void Connect(int fd, const struct sockaddr *addr, socklen_t addrlen)
+{
+    if (connect(fd, addr, addrlen) < 0) {
+        perror("connect");
+        exit(SOCKET_ERR);
+    }
+}
+
+ssize_t Send(int fd, const void *buf, size_t buflen, int flags)
+{
+    ssize_t sent = send(fd, buf, buflen, flags);
+    if (sent < 0) {
+        perror("send");
+        exit(SOCKET_ERR);
+    }
+
+    return sent;
+}
+
+ssize_t Recv(int fd, void *buf, size_t buflen, int flags)
+{
+    ssize_t received = recv(fd, buf, buflen, flags);
+    if (received < 0) {
+        perror("recv");
+        exit(SOCKET_ERR);
+    }
+
+    return received;
+}
