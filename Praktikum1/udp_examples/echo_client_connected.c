@@ -36,7 +36,8 @@ int main(int argc, char **argv)
     }
 
     // Connect
-    Connect(fd, (const struct sockaddr*)&server_addr, (socklen_t)sizeof(struct sockaddr_in));
+    //Connect(fd, (const struct sockaddr*)&server_addr, (socklen_t)sizeof(struct sockaddr_in));
+    Connect(fd, (const struct sockaddr*)&server_addr, sizeof(server_addr));
 
     memset((void *) buf, 'A', sizeof(buf));
 
@@ -47,7 +48,7 @@ int main(int argc, char **argv)
 
     // Recv statt RecvFrom
     len = Recv(fd, (void *)buf, sizeof(buf), 0);
-    printf("Received %zd bytes from %s.\n", len, inet_ntoa(client_addr.sin_addr));
+    printf("Received %zd bytes from %s.\n", len, argv[1]);
     buf[len] = 0;
     Close(fd);
     return(0);
