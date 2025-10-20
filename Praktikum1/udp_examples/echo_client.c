@@ -23,7 +23,7 @@ int main(int argc, char **argv)
 	ssize_t len;
 	char buf[BUFFER_SIZE];
 
-    fd = Socket(AF_INET, SOCK_DGRAM, 0);
+    fd = Socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 
 	memset(&server_addr, 0, sizeof(server_addr));
 	server_addr.sin_family = AF_INET;
