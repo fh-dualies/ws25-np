@@ -20,6 +20,8 @@ AC_CHECK_TYPE(ssize_t)
 AC_CHECK_FUNCS(socket, , [AC_CHECK_LIB(socket, socket)])
 AC_CHECK_FUNCS(inet_addr, , [AC_CHECK_LIB(nsl, inet_addr)])
 
+AC_CHECK_HEADERS(netinet/udplite.h)
+
 AC_CHECK_HEADERS(sys/types.h)
 AC_CHECK_MEMBER(struct sockaddr_in.sin_len,
                 AC_DEFINE(HAVE_SIN_LEN, 1, [Define this if your system has sin_len in sockaddr_in struct.]),,

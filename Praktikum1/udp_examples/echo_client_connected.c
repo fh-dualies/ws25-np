@@ -8,15 +8,6 @@
 #include "Socket.h"
 
 #define BUFFER_SIZE  (1<<16)
-/* 
-  IPv4 Pakete haben einen maximalen payload mit 65515 bytes.
-  Da der UDP headder 8 bytes groß ist, kann udp nur 65507 bytes übertragen.
-  IPv6 kann UDP pakete mit einer größe von maximal 65487 bytes übertragen.
-  Die Theoretisch maximale größe eines UDP Payloads is 65535 bytes.
-  
-  Wird eine größere größe angegeben, so schlägt der Send call fehl.
-  In diesem fall ist errno auf "Message to long" gesetzt.
-*/
 #define MESSAGE_SIZE (9216)
 
 int main(int argc, char **argv)
@@ -44,18 +35,14 @@ int main(int argc, char **argv)
         fprintf(stderr, "Invalid address\n");
     }
 
-    // Connect
-    //Connect(fd, (const struct sockaddr*)&server_addr, (socklen_t)sizeof(struct sockaddr_in));
     Connect(fd, (const struct sockaddr*)&server_addr, sizeof(server_addr));
 
     memset((void *) buf, 'A', sizeof(buf));
 
-    // Send() statt SendTo()
     Send(fd, buf, MESSAGE_SIZE, 0);
 
     memset((void *) buf, 0, sizeof(buf));
 
-    // Recv statt RecvFrom
     len = Recv(fd, (void *)buf, sizeof(buf), 0);
     printf("Received %zd bytes from %s.\n", len, argv[1]);
     buf[len] = 0;

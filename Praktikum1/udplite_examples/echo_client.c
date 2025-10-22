@@ -5,6 +5,9 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdio.h>
+#ifdef HAVE_NETINET_UDPLITE_H
+#include <netinet/udplite.h>
+#endif
 #include "Socket.h"
 
 #define BUFFER_SIZE  (1<<16)
@@ -28,11 +31,7 @@ int main(int argc, char **argv)
     
 	fd = Socket(AF_INET, SOCK_DGRAM, IPPROTO_UDPLITE);
 	Setsockopt(fd, IPPROTO_UDPLITE, UDPLITE_SEND_CSCOV, &cscov, sizeof(cscov));
-	
-	// Check how UDPLITE_SEND_CSCOV was set
-	socklen_t sockt_opt_len = sizeof(cscov);
-	Getsockopt(fd, IPPROTO_UDPLITE, UDPLITE_SEND_CSCOV, &cscov, &sockt_opt_len);
-	printf("UDPLITE_SEND_CSCOV: %u\n", cscov);
+	Setsockopt(fd, IPPROTO_UDPLITE, UDPLITE_RECV_CSCOV, &cscov, sizeof(cscov));
 
 	memset(&server_addr, 0, sizeof(server_addr));
 	server_addr.sin_family = AF_INET;
@@ -50,7 +49,7 @@ int main(int argc, char **argv)
 	addr_len = (socklen_t) sizeof(client_addr);
 	memset((void *) buf, 0, sizeof(buf));
 	len = Recvfrom(fd, (void *) buf, sizeof(buf), 0, (struct sockaddr *) &client_addr, &addr_len);
-    printf("Received %zd bytes from %s.\n", len, inet_ntoa(client_addr.sin_addr));
+	printf("Received %zd bytes from %s:%d.\n", len, inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 	Close(fd);
 	return(0);
 }

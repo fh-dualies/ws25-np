@@ -41,7 +41,7 @@ int main(int argc, char **argv)
 	addr_len = (socklen_t) sizeof(client_addr);
 	memset((void *) buf, 0, sizeof(buf));
 	len = Recvfrom(fd, (void *) buf, sizeof(buf), 0, (struct sockaddr *) &client_addr, &addr_len);
-    printf("Received %zd bytes from %s.\n", len, inet_ntoa(client_addr.sin_addr));
+    printf("Received %zd bytes from %s:%d.\n", len, inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 	Close(fd);
 	return(0);
 }
