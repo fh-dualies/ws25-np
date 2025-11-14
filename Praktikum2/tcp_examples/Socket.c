@@ -98,3 +98,30 @@ int Select(int __nfds, fd_set * __readfds, fd_set * __writefds, fd_set * __excep
     }
     return result;
 }
+
+void SetSockOpt(int fd, int level, int optname, const void *optval, socklen_t optlen)
+{
+    if (setsockopt(fd, level, optname, optval, optlen) < 0) {
+        perror("setsockopt");
+        exit(SOCKET_ERR);
+    }
+}
+
+void Listen(int fd, int backlog)
+{
+    if (listen(fd, backlog) < 0) {
+        perror("listen");
+        exit(SOCKET_ERR);
+    }
+}
+
+int Accept(int fd, struct sockaddr *addr, socklen_t *addrlen)
+{
+    int cfd = accept(fd, addr, addrlen);
+    if (cfd < 0) {
+        perror("accept");
+        exit(SOCKET_ERR);
+    }
+
+    return cfd;
+}

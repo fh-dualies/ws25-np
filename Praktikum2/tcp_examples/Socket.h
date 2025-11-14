@@ -16,5 +16,8 @@ ssize_t Send(int fd, const void *buf, size_t buflen, int flags);
 ssize_t Recv(int fd, void *buf, size_t buflen, int flags);
 int Shutdown(int __fd, int __how);
 int Select(int __nfds, fd_set * __readfds, fd_set * __writefds, fd_set * __exceptfds, struct timeval * __timeout);
+void SetSockOpt(int fd, int level, int optname, const void *optval, socklen_t optlen);
+void Listen(int fd, int backlog);
+int Accept(int fd, struct sockaddr *addr, socklen_t *addrlen);
 
 #endif

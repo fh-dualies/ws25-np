@@ -25,6 +25,7 @@ int main(int argc, char **argv)
 	ssize_t len;
 	char buf[BUFFER_SIZE];
 
+    // AF_UNSPEC ?
     fd = Socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
 	memset(&server_addr, 0, sizeof(server_addr));
