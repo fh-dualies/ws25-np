@@ -11,7 +11,7 @@
 #include "Socket.h"
 
 #define BUFFER_SIZE (1<<16)
-#define MAX_PORT 65535
+#define MAX_FDS 20
 
 int main(int argc, char **argv)
 {
@@ -20,10 +20,16 @@ int main(int argc, char **argv)
         return 1;
     }
 
-	int parent_fd, client_fd, opt_val, rv;
-	struct sockaddr_in server_addr, client_addr;
-	ssize_t len;
+	int parent_fd, opt_val, rv;
+	struct sockaddr_in server_addr;
 	char buf[BUFFER_SIZE];
+
+	int count_connections = 0;
+	int max_fd;
+	int connection_fds[MAX_FDS];
+	fd_set rset;
+
+	memset(connection_fds, -1, MAX_FDS * sizeof(int));
 
 	parent_fd = Socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     opt_val = 1;
@@ -49,10 +55,6 @@ int main(int argc, char **argv)
 	server_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 
     long port = strtol(argv[2], NULL, 10);
-    if (port > MAX_PORT || port < 0) {
-        fprintf(stderr, "invalid port: 0-%d allowed\n", MAX_PORT);
-        return 1;
-    }
 
 	server_addr.sin_port = htons(port);
 
@@ -60,16 +62,53 @@ int main(int argc, char **argv)
     Listen(parent_fd, 10);
 
 	for (;;) {
-        client_fd = Accept(parent_fd, (struct sockaddr *) &client_addr, (socklen_t *)&len);
-        time_t time_ = time(NULL);
-        char *ascii_time = ctime(&time_);
+		FD_ZERO(&rset);
+		FD_SET(parent_fd, &rset);
+		max_fd = parent_fd;
 
-        Send(client_fd, ascii_time, strlen(ascii_time) + 1, 0);
-        Shutdown(client_fd, SHUT_WR);
-        do {
-            len = Recv(client_fd, (void*) buf, BUFFER_SIZE, 0);
-        } while(len>0);
-        Close(client_fd);
+		for (int i = 0; i < MAX_FDS; ++i) {
+			if (connection_fds[i] < 0) continue;
+			FD_SET(connection_fds[i], &rset);
+			if (connection_fds[i] > max_fd) {
+				max_fd = connection_fds[i];
+			}
+		}
+
+		Select(max_fd + 1, &rset, NULL, NULL, (struct timeval *) 0);
+
+		// New Connection?
+		if (FD_ISSET(parent_fd, &rset)) {
+			if (count_connections < MAX_FDS) {
+				for (int i = 0; i < MAX_FDS; ++i) {
+					if (connection_fds[i] == -1) {
+						connection_fds[i] = Accept(parent_fd, NULL, NULL);
+						count_connections++;
+						time_t time_ = time(NULL);
+						char *ascii_time = ctime(&time_);
+						Send(connection_fds[i], ascii_time, strlen(ascii_time) + 1, 0);
+						Shutdown(connection_fds[i], SHUT_WR);
+						break;
+					}
+				}
+			} else {
+				int fd = Accept(parent_fd, NULL, NULL);
+				Close(fd);
+			}
+		}
+
+		// New information from the client?
+		for (int i = 0; i < MAX_FDS; ++i) {
+			if (connection_fds[i] != -1 && FD_ISSET(connection_fds[i], &rset)) {
+				if (!Recv(connection_fds[i], buf, BUFFER_SIZE, 0)) {
+					printf("%sClosing FD %d%s\n", COLOR_CYAN, connection_fds[i], COLOR_RESET);
+					Close(connection_fds[i]);
+					connection_fds[i] = -1;
+					count_connections--;
+				} else {
+					printf("Data discarded from FD %d\n", connection_fds[i]);
+				}
+			}
+		}
 	}
 
 	Close(parent_fd);

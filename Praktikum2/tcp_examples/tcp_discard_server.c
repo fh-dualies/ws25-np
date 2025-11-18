@@ -11,8 +11,7 @@
 #include "Socket.h"
 
 #define BUFFER_SIZE (1<<16)
-#define MAX_PORT 65535
-#define MAX_FDS 2
+#define MAX_FDS 20
 
 int main(int argc, char **argv)
 {
@@ -57,10 +56,6 @@ int main(int argc, char **argv)
 
     long port = strtol(argv[2], NULL, 10);
 
-    if (port > MAX_PORT || port < 0) {
-        fprintf(stderr, "invalid port: 0-%d allowed\n", MAX_PORT);
-        return 1;
-    }
     server_addr.sin_port = htons(port);
 
     Bind(parent_fd, (const struct sockaddr *) &server_addr, sizeof(server_addr));
@@ -72,44 +67,40 @@ int main(int argc, char **argv)
         max_fd = parent_fd;
 
         for (int i = 0; i < MAX_FDS; ++i) {
-            if (connection_fds[i] != -1) {
-                FD_SET(connection_fds[i], &rset);
-                if (connection_fds[i] > max_fd) {
-                    // determine max_fd (for select() call)
-                    max_fd = connection_fds[i];
-                }
+            if (connection_fds[i] < 0) continue;
+            FD_SET(connection_fds[i], &rset);
+            if (connection_fds[i] > max_fd) {
+                max_fd = connection_fds[i];
             }
         }
 
         Select(max_fd + 1, &rset, NULL, NULL, (struct timeval *) 0);
 
         // New Connection?
-        if (count_connections < MAX_FDS && FD_ISSET(parent_fd, &rset)) {
-            // Accept client
-            for (int i = 0; i < MAX_FDS; ++i) {
-                if (connection_fds[i] == -1) {
-                    connection_fds[i] = Accept(parent_fd, NULL, NULL);
-                    count_connections++;
-                    break;
+        if (FD_ISSET(parent_fd, &rset)) {
+            if (count_connections < MAX_FDS) {
+                for (int i = 0; i < MAX_FDS; ++i) {
+                    if (connection_fds[i] == -1) {
+                        connection_fds[i] = Accept(parent_fd, NULL, NULL);
+                        count_connections++;
+                        break;
+                    }
                 }
+            } else {
+                int fd = Accept(parent_fd, NULL, NULL);
+                Close(fd);
             }
-        } else if (count_connections >= MAX_FDS && FD_ISSET(parent_fd, &rset)) {
-            // Deny client
-            int fd = Accept(parent_fd, NULL, NULL);
-            Close(fd);
         }
 
         // New information from the client?
         for (int i = 0; i < MAX_FDS; ++i) {
             if (connection_fds[i] != -1 && FD_ISSET(connection_fds[i], &rset)) {
                 if (!Recv(connection_fds[i], buf, BUFFER_SIZE, 0)) {
-                    // close & remove client
                     printf("%sClosing FD %d%s\n", COLOR_CYAN, connection_fds[i], COLOR_RESET);
                     Close(connection_fds[i]);
                     connection_fds[i] = -1;
                     count_connections--;
                 } else {
-                    // discard data
                     printf("Data discarded from FD %d\n", connection_fds[i]);
                 }
             }
