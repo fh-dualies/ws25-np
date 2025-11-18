@@ -26,7 +26,7 @@ void handle(int client_fd, int connect_cnt);
 int main(int argc, char **argv)
 {
     if(argc < 3) {
-        fprintf(stderr, "(ECHO_THREADED) Usage: %s <server_address> <port>\n", argv[0]);
+        fprintf(stderr, "Usage: %s <server_address> <port>\n", argv[0]);
         return 1;
     }
 
@@ -61,7 +61,7 @@ int main(int argc, char **argv)
     Listen(parent_fd, 10);
 
     for (;;) {
-        client_fd = Accept(parent_fd, (struct sockaddr *) &client_addr, &len);
+        client_fd = Accept(parent_fd, (struct sockaddr *) &client_addr, (socklen_t *)&len);
 
         thread_data = (struct thread_data *) malloc(sizeof(struct thread_data));
         thread_data->client_fd = client_fd;
@@ -69,7 +69,7 @@ int main(int argc, char **argv)
 
         pthread_t thread_id;
         pthread_create(&thread_id, NULL, handleThread, (void *) thread_data);
-        printf("Client with ID %d connected\n", count_connections);
+        printf("%sClient with ID %d connected%s\n", COLOR_CYAN, count_connections, COLOR_RESET);
 
         count_connections++;
     }
@@ -104,17 +104,13 @@ void handle(int client_fd, int count_connections) {
             sent += Send(client_fd, buf + sent, recv_bytes - sent, 0);
         } while (sent < recv_bytes);
 
-        printf("Handle Client with ID %d\n", count_connections);
-
-        fflush(stdout);
-        if (write(STDOUT_FILENO, buf, recv_bytes) < 0) {
-            perror("write");
-            break;
-        }
+        printf("%sClient %d >%s ", COLOR_GREEN, count_connections, COLOR_RESET);
+        fwrite(buf, 1, (size_t)recv_bytes, stdout);
 
         recv_bytes = Recv(client_fd, buf, BUFFER_SIZE, 0);
     }
 
     Close(client_fd);
-    printf("Client with ID %d disconnected\n", count_connections);
+
+    printf("%sClient with ID %d disconnected%s\n", COLOR_CYAN, count_connections, COLOR_RESET);
 }

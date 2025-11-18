@@ -20,12 +20,10 @@ int main(int argc, char **argv)
 	}
 
 	int fd;
-	struct sockaddr_in server_addr, client_addr;
-	socklen_t addr_len;
+	struct sockaddr_in server_addr;
 	ssize_t len;
 	char buf[BUFFER_SIZE];
 
-    // AF_UNSPEC ?
     fd = Socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
 	memset(&server_addr, 0, sizeof(server_addr));
@@ -40,9 +38,9 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-    printf("Connecting to %s:%s...\n", argv[1], argv[2]);
+    printf("%sConnecting to %s:%s...%s\n", COLOR_CYAN, argv[1], argv[2], COLOR_RESET);
 	Connect(fd, (const struct sockaddr *) &server_addr, sizeof(server_addr));
-    printf("Connected to %s:%s\n", argv[1], argv[2]);
+    printf("%sConnected to %s:%s%s\n", COLOR_CYAN, argv[1], argv[2], COLOR_RESET);
 
 	fd_set read_fds;
 	int server_closed = 0;
@@ -58,6 +56,7 @@ int main(int argc, char **argv)
 			if (len <= 0) {
 				server_closed = 1;
 			} else {
+				printf("%s>%s ", COLOR_GREEN, COLOR_RESET);
                 fwrite(buf, 1, (size_t)len, stdout);
 			}
 		}
@@ -73,10 +72,12 @@ int main(int argc, char **argv)
 
     if (server_closed) {
         // If the server closed the connection, we are done
-        printf("Server closed the connection - Stdin was still open.\n");
+        puts(COLOR_CYAN "Server closed the connection - Stdin was still open." COLOR_RESET);
         Close(fd);
         return 0;
     }
+
+    puts(COLOR_CYAN "Stdin closed - sending FIN to server." COLOR_RESET);
 
     Shutdown(fd, SHUT_WR);
 
@@ -84,7 +85,7 @@ int main(int argc, char **argv)
     while (!server_closed) {
         len = Recv(fd, (void *) buf, sizeof(buf), 0);
         if (len <= 0) {
-            printf("Server closed the connection.\n");
+            puts(COLOR_CYAN "Server closed the connection." COLOR_RESET);
             server_closed = 1;
         } else {
             fwrite(buf, 1, (size_t)len, stdout);

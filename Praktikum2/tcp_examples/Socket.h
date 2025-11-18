@@ -5,6 +5,9 @@
 #define SOCKET_H
 
 #define SOCKET_ERR -1
+#define COLOR_CYAN "\x1b[36m"
+#define COLOR_GREEN "\x1b[32m"
+#define COLOR_RESET "\x1b[0m"
 
 int Socket(int family, int type, int protocol);
 void Bind(int fd, const struct sockaddr *addr, socklen_t addrlen);

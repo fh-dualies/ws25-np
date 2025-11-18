@@ -16,7 +16,7 @@
 int main(int argc, char **argv)
 {
     if(argc < 3) {
-        fprintf(stderr, "(DAYTIME) Usage: %s <server_address> <port>\n", argv[0]);
+        fprintf(stderr, "Usage: %s <server_address> <port>\n", argv[0]);
         return 1;
     }
 
@@ -60,7 +60,7 @@ int main(int argc, char **argv)
     Listen(parent_fd, 10);
 
 	for (;;) {
-        client_fd = Accept(parent_fd, (struct sockaddr *) &client_addr, &len);
+        client_fd = Accept(parent_fd, (struct sockaddr *) &client_addr, (socklen_t *)&len);
         time_t time_ = time(NULL);
         char *ascii_time = ctime(&time_);
 

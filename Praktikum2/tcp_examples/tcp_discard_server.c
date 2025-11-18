@@ -17,7 +17,7 @@
 int main(int argc, char **argv)
 {
     if(argc < 3) {
-        fprintf(stderr, "(DISCARD) Usage: %s <server_address> <port>\n", argv[0]);
+        fprintf(stderr, "Usage: %s <server_address> <port>\n", argv[0]);
         return 1;
     }
 
@@ -74,7 +74,6 @@ int main(int argc, char **argv)
         for (int i = 0; i < MAX_FDS; ++i) {
             if (connection_fds[i] != -1) {
                 FD_SET(connection_fds[i], &rset);
-                printf("%d, ", connection_fds[i]);
                 if (connection_fds[i] > max_fd) {
                     // determine max_fd (for select() call)
                     max_fd = connection_fds[i];
@@ -105,7 +104,7 @@ int main(int argc, char **argv)
             if (connection_fds[i] != -1 && FD_ISSET(connection_fds[i], &rset)) {
                 if (!Recv(connection_fds[i], buf, BUFFER_SIZE, 0)) {
                     // close & remove client
-                    printf("Closing FD %d\n", connection_fds[i]);
+                    printf("%sClosing FD %d%s\n", COLOR_CYAN, connection_fds[i], COLOR_RESET);
                     Close(connection_fds[i]);
                     connection_fds[i] = -1;
                     count_connections--;
