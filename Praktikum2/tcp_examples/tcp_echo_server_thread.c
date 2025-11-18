@@ -12,7 +12,6 @@
 #include "Socket.h"
 
 #define BUFFER_SIZE (1<<16)
-#define MAX_PORT 65535
 
 struct thread_data {
     int client_fd;
@@ -21,7 +20,7 @@ struct thread_data {
 
 void *handleThread(void *thread_data);
 
-void handle(int client_fd, int connect_cnt);
+void handle(int client_fd);
 
 int main(int argc, char **argv)
 {
@@ -34,8 +33,6 @@ int main(int argc, char **argv)
     struct sockaddr_in server_addr, client_addr;
     struct thread_data *thread_data;
     ssize_t len;
-
-    int count_connections = 0;
 
     parent_fd = Socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     opt_val = 1;
@@ -51,10 +48,6 @@ int main(int argc, char **argv)
     server_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 
     long port = strtol(argv[2], NULL, 10);
-    if (port > MAX_PORT || port < 0) {
-        fprintf(stderr, "invalid port: 0-%d allowed\n", MAX_PORT);
-        return 1;
-    }
     server_addr.sin_port = htons(port);
 
     Bind(parent_fd, (const struct sockaddr *) &server_addr, sizeof(server_addr));
@@ -65,13 +58,10 @@ int main(int argc, char **argv)
 
         thread_data = (struct thread_data *) malloc(sizeof(struct thread_data));
         thread_data->client_fd = client_fd;
-        thread_data->connect_cnt = count_connections;
 
         pthread_t thread_id;
         pthread_create(&thread_id, NULL, handleThread, (void *) thread_data);
-        printf("%sClient with ID %d connected%s\n", COLOR_CYAN, count_connections, COLOR_RESET);
-
-        count_connections++;
+        printf("%sClient with FD %d connected%s\n", COLOR_CYAN, client_fd, COLOR_RESET);
     }
 
     Close(parent_fd);
@@ -79,20 +69,19 @@ int main(int argc, char **argv)
 }
 
 void *handleThread(void *thread_data) {
-    int client_fd, count_connections;
+    int client_fd;
 
     pthread_detach(pthread_self());
 
     client_fd = ((struct thread_data *) thread_data)->client_fd;
-    count_connections = ((struct thread_data *) thread_data)->connect_cnt;
     free(thread_data);
 
-    handle(client_fd, count_connections);
+    handle(client_fd);
 
     return (NULL);
 }
 
-void handle(int client_fd, int count_connections) {
+void handle(int client_fd) {
     char buf[BUFFER_SIZE];
     int recv_bytes, sent;
 
@@ -104,7 +93,7 @@ void handle(int client_fd, int count_connections) {
             sent += Send(client_fd, buf + sent, recv_bytes - sent, 0);
         } while (sent < recv_bytes);
 
-        printf("%sClient %d >%s ", COLOR_GREEN, count_connections, COLOR_RESET);
+        printf("%sFD %d >%s ", COLOR_GREEN, client_fd, COLOR_RESET);
         fwrite(buf, 1, (size_t)recv_bytes, stdout);
 
         recv_bytes = Recv(client_fd, buf, BUFFER_SIZE, 0);
@@ -112,5 +101,5 @@ void handle(int client_fd, int count_connections) {
 
     Close(client_fd);
 
-    printf("%sClient with ID %d disconnected%s\n", COLOR_CYAN, count_connections, COLOR_RESET);
+    printf("%sClient with FD %d disconnected%s\n", COLOR_CYAN, client_fd, COLOR_RESET);
 }
