@@ -18,6 +18,11 @@ Makefile.in
 echo_client.o
 echo_server.o
 Socket.o
+/echo_client_connected.o
+/tcp_daytime_server.o
+/tcp_client.o
+/tcp_discard_server.o
+/tcp_echo_server_thread.o
 
 # Executables
 echo_client
@@ -28,5 +33,8 @@ echo_server
 /README
 /NEWS
 /INSTALL
-/echo_client_connected.o
 /echo_client_connected
+/tcp_daytime_server
+/tcp_client
+/tcp_discard_server
+/tcp_echo_server_thread

@@ -11,17 +11,17 @@
 #include "Socket.h"
 
 #define BUFFER_SIZE (1<<16)
+#define MAX_PORT 65535
 
 int main(int argc, char **argv)
 {
     if(argc < 3) {
-        fprintf(stderr, "Usage: %s <server_address> <port>\n", argv[0]);
+        fprintf(stderr, "(DAYTIME) Usage: %s <server_address> <port>\n", argv[0]);
         return 1;
     }
 
-	int parent_fd, client_fd, opt_val;
+	int parent_fd, client_fd, opt_val, rv;
 	struct sockaddr_in server_addr, client_addr;
-	socklen_t addr_len;
 	ssize_t len;
 	char buf[BUFFER_SIZE];
 
@@ -35,14 +35,25 @@ int main(int argc, char **argv)
 #ifdef HAVE_SIN_LEN
 	server_addr.sin_len = sizeof(struct sockaddr_in);
 #endif
+
+    rv = inet_pton(AF_INET, argv[1], &server_addr.sin_addr);
+    if (rv != 1) {
+        if (rv < 0) {
+            printf("inet_pton");
+            return 1;
+        }
+        printf("invalid server address");
+        return 1;
+    }
+
 	server_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 
     long port = strtol(argv[2], NULL, 10);
-
-    if (port > 65535 || port < 0) {
-        fprintf(stderr, "invalid port: 0-%d allowed\n", 65535);
+    if (port > MAX_PORT || port < 0) {
+        fprintf(stderr, "invalid port: 0-%d allowed\n", MAX_PORT);
         return 1;
     }
+
 	server_addr.sin_port = htons(port);
 
 	Bind(parent_fd, (const struct sockaddr *) &server_addr, sizeof(server_addr));
