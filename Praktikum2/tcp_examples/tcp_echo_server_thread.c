@@ -15,7 +15,6 @@
 
 struct thread_data {
     int client_fd;
-    int connect_cnt;
 };
 
 void *handleThread(void *thread_data);

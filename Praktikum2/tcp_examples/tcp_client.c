@@ -48,7 +48,7 @@ int main(int argc, char **argv)
     FD_ZERO(&read_fds);
     while (!server_closed && !stdin_closed) {
 		FD_SET(fd, &read_fds);
-		FD_SET(0, &read_fds);
+		FD_SET(STDIN_FILENO, &read_fds);
 		Select(fd + 1, &read_fds, NULL, NULL, NULL);
 
 		if (FD_ISSET(fd, &read_fds)) {
@@ -57,11 +57,11 @@ int main(int argc, char **argv)
 				server_closed = 1;
 			} else {
 				printf("%s>%s ", COLOR_GREEN, COLOR_RESET);
-                fwrite(buf, 1, (size_t)len, stdout);
+                write(STDOUT_FILENO, buf, (size_t)len);
 			}
 		}
-		if (FD_ISSET(0, &read_fds)) {
-			len = read(0, buf, MESSAGE_SIZE);
+		if (FD_ISSET(STDIN_FILENO, &read_fds)) {
+			len = read(STDIN_FILENO, buf, MESSAGE_SIZE);
             if (len <= 0) {
                 stdin_closed = 1;
             } else {
@@ -88,7 +88,7 @@ int main(int argc, char **argv)
             puts(COLOR_CYAN "Server closed the connection." COLOR_RESET);
             server_closed = 1;
         } else {
-            fwrite(buf, 1, (size_t)len, stdout);
+            write(STDOUT_FILENO, buf, (size_t)len);
         }
     }
 
