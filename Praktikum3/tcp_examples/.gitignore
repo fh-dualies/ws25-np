@@ -1,0 +1,40 @@
+# Auto-generated files by GNU Autotools
+aclocal.m4
+autom4te.cache/
+compile
+config.*
+configure
+configure~
+depcomp
+install-sh
+missing
+
+# Build systems
+Makefile
+Makefile.in
+.deps/
+
+# Object files
+echo_client.o
+echo_server.o
+Socket.o
+/echo_client_connected.o
+/tcp_daytime_server.o
+/tcp_client.o
+/tcp_discard_server.o
+/tcp_echo_server_thread.o
+
+# Executables
+echo_client
+echo_server
+/COPYING
+/ChangeLog
+/AUTHORS
+/README
+/NEWS
+/INSTALL
+/echo_client_connected
+/tcp_daytime_server
+/tcp_client
+/tcp_discard_server
+/tcp_echo_server_thread
