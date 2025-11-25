@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 int Socket(int family, int type, int protocol)
 {
@@ -14,12 +15,14 @@ int Socket(int family, int type, int protocol)
     return fd;
 }
 
-void Bind(int fd, const struct sockaddr *addr, socklen_t addrlen)
+int Bind(int fd, const struct sockaddr *addr, socklen_t addrlen, bool pexit)
 {
-    if (bind(fd, addr, addrlen) < 0) {
+    int result = bind(fd, addr, addrlen);
+    if (result < 0) {
         perror("bind");
-        exit(SOCKET_ERR);
+        if (pexit) exit(SOCKET_ERR);
     }
+    return result;
 }
 
 ssize_t Sendto(int fd, const void *buf, size_t buflen, int flags, const struct sockaddr *to, socklen_t tolen)
@@ -99,12 +102,14 @@ int Select(int __nfds, fd_set * __readfds, fd_set * __writefds, fd_set * __excep
     return result;
 }
 
-void SetSockOpt(int fd, int level, int optname, const void *optval, socklen_t optlen)
+int SetSockOpt(int fd, int level, int optname, const void *optval, socklen_t optlen, bool pexit)
 {
-    if (setsockopt(fd, level, optname, optval, optlen) < 0) {
+    int result = setsockopt(fd, level, optname, optval, optlen);
+    if (result < 0) {
         perror("setsockopt");
-        exit(SOCKET_ERR);
+        if (pexit) exit(SOCKET_ERR);
     }
+    return result;
 }
 
 void Listen(int fd, int backlog)

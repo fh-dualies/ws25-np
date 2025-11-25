@@ -35,7 +35,7 @@ int main(int argc, char **argv)
 
     parent_fd = Socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     opt_val = 1;
-    SetSockOpt(parent_fd, SOL_SOCKET, SO_REUSEADDR, (const void *) &opt_val, sizeof(int));
+    SetSockOpt(parent_fd, SOL_SOCKET, SO_REUSEADDR, (const void *) &opt_val, sizeof(int), true);
 
     memset((void *) &server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
@@ -49,7 +49,7 @@ int main(int argc, char **argv)
     long port = strtol(argv[2], NULL, 10);
     server_addr.sin_port = htons(port);
 
-    Bind(parent_fd, (const struct sockaddr *) &server_addr, sizeof(server_addr));
+    Bind(parent_fd, (const struct sockaddr *) &server_addr, sizeof(server_addr), true);
     Listen(parent_fd, 10);
 
     for (;;) {

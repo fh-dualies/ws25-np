@@ -23,6 +23,8 @@ Socket.o
 /tcp_client.o
 /tcp_discard_server.o
 /tcp_echo_server_thread.o
+/tcp_echo_server_thread_chargen.o
+/getaddresses.o
 
 # Executables
 echo_client
@@ -38,3 +40,5 @@ echo_server
 /tcp_client
 /tcp_discard_server
 /tcp_echo_server_thread
+/tcp_echo_server_thread_chargen
+/getaddresses
