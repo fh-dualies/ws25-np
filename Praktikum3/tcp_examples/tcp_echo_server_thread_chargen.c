@@ -8,11 +8,14 @@
 #include <string.h>
 #include <sys/select.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+
 
 #define BUFFER_SIZE (1 << 16)
 #define LINE_LENGTH 72
 
-void *handleThread(int *fd_ptr);
+void *handleThread(void *fd_ptr);
 void chargen_main(int client_fd);
 
 int main(int argc, char **argv)
@@ -106,12 +109,12 @@ int main(int argc, char **argv)
     return 0;
 }
 
-void *handleThread(int *fd_ptr)
+void *handleThread(void *fd_ptr)
 {
     int client_fd;
 
     pthread_detach(pthread_self());
-    client_fd = *fd_ptr;
+    client_fd = *((int*)fd_ptr);
     free(fd_ptr);
 
     chargen_main(client_fd);

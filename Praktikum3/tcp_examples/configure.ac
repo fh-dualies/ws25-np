@@ -6,7 +6,7 @@ AC_PROG_CC
 
 AC_CANONICAL_HOST
 
-CFLAGS="$CFLAGS -Wall -std=c99 -pedantic"
+CFLAGS="$CFLAGS -Wall -std=gnu99 -pedantic"
 
 case $host_os in
 solaris*)
