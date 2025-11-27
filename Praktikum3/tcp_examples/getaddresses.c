@@ -48,7 +48,7 @@ int main (int argc, char **argv){
     }
     printf("----\n");
 
-    freeaddrinfo(entry);
+    freeaddrinfo(result);
 
     return 0;
 }
