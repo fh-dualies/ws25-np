@@ -36,7 +36,15 @@ int main (int argc, char **argv){
           NI_NUMERICHOST
         );
         printf("----\n");
-        printf("Host: %s; Protocol: %d; SocketType: %d;\n", host, entry->ai_protocol, entry->ai_socktype);
+        int ipVersion;
+        if (entry->ai_family == AF_INET) {
+            ipVersion = 4;
+        } else if (entry->ai_family == AF_INET6) {
+            ipVersion = 6;
+        } else {
+            continue;
+        }
+        printf("Host: %s; IPv%d; SocketType: %d;\n", host, ipVersion, entry->ai_socktype);
     }
     printf("----\n");
 
