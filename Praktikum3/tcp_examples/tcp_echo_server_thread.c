@@ -29,27 +29,40 @@ int main(int argc, char **argv)
     }
 
     int parent_fd, client_fd, opt_val;
-    struct sockaddr_in server_addr, client_addr;
+    struct sockaddr *server_addr, client_addr;
+    socklen_t server_addrlen;
+    struct sockaddr_in server_addr_v4;
+    struct sockaddr_in6 server_addr_v6;
     struct thread_data *thread_data;
     ssize_t len;
 
-    parent_fd = Socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    long port = htons(strtol(argv[2], NULL, 10));
+    if (inet_pton(AF_INET, argv[1], &server_addr_v4.sin_addr) != 0) {
+        server_addr = (struct sockaddr *)&server_addr_v4;
+        server_addrlen = sizeof(struct sockaddr_in);
+        server_addr_v4.sin_family = AF_INET;
+        #ifdef HAVE_SIN_LEN
+        server_addr_v4.sin_len = sizeof(struct sockaddr_in);
+        #endif
+        server_addr_v4.sin_port = port;
+    } else if (inet_pton(AF_INET6, argv[1], &server_addr_v6.sin6_addr) != 0) {
+        server_addr = (struct sockaddr *)&server_addr_v6;
+        server_addrlen = sizeof(struct sockaddr_in6);
+        server_addr_v6.sin6_family = AF_INET6;
+        #ifdef HAVE_SIN_LEN
+        server_addr_v6.sin6_len = sizeof(struct sockaddr_in6);
+        #endif
+        server_addr_v6.sin6_port = port;
+    } else {
+        fprintf(stderr, "No valid adress found in: %s\n", argv[1]);
+        return 1;
+    }
+
+    parent_fd = Socket(server_addr->sa_family, SOCK_STREAM, IPPROTO_TCP);
     opt_val = 1;
     SetSockOpt(parent_fd, SOL_SOCKET, SO_REUSEADDR, (const void *) &opt_val, sizeof(int), true);
 
-    memset((void *) &server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-
-#ifdef HAVE_SIN_LEN
-    server_addr.sin_len = sizeof(struct sockaddr_in);
-#endif
-
-    server_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-
-    long port = strtol(argv[2], NULL, 10);
-    server_addr.sin_port = htons(port);
-
-    Bind(parent_fd, (const struct sockaddr *) &server_addr, sizeof(server_addr), true);
+    Bind(parent_fd, server_addr, server_addrlen, true);
     Listen(parent_fd, 10);
 
     for (;;) {
