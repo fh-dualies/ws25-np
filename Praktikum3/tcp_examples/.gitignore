@@ -15,16 +15,7 @@ Makefile.in
 .deps/
 
 # Object files
-echo_client.o
-echo_server.o
-Socket.o
-/echo_client_connected.o
-/tcp_daytime_server.o
-/tcp_client.o
-/tcp_discard_server.o
-/tcp_echo_server_thread.o
-/tcp_echo_server_thread_chargen.o
-/getaddresses.o
+*.o
 
 # Executables
 echo_client
@@ -35,6 +26,7 @@ echo_server
 /README
 /NEWS
 /INSTALL
+/tcp_client_with_dns
 /echo_client_connected
 /tcp_daytime_server
 /tcp_client
