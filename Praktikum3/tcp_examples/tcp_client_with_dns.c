@@ -73,16 +73,29 @@ int get_addresses(char* name, struct addrinfo** result) {
 	return count;
 }
 
-void set_address_ports(struct addrinfo *addresses, int port) {
+int set_address_ports(struct addrinfo *addresses, char* input) {
+	int port = atoi(input);
+	if (port == 0) {
+		struct servent* servname = getservbyname(input, "tcp");
+		if (servname == NULL) {
+			fprintf(stderr, "Service name \"%s\" not found\n", input);
+			return 1;
+		}
+		port = servname->s_port;
+	} else {
+		port = htons(port);
+	}
+
+
 	struct addrinfo *entry;
-	int port_net = htons(port);
 	for (entry = addresses; entry != NULL; entry = entry->ai_next) {
 		if (entry->ai_family == AF_INET) {
-			((struct sockaddr_in*)(entry->ai_addr))->sin_port = port_net;
+			((struct sockaddr_in*)(entry->ai_addr))->sin_port = port;
 		} else if (entry->ai_family == AF_INET6) {
-			((struct sockaddr_in6*)(entry->ai_addr))->sin6_port = port_net;
+			((struct sockaddr_in6*)(entry->ai_addr))->sin6_port = port;
 		}
 	}
+	return 0;
 }
 
 void create_sockets(struct addrinfo *addresses, int* fds, char** ips ) {
@@ -113,19 +126,16 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	int port = atoi(argv[2]);
-	if (port == 0) {
-		fprintf(stderr, "Unvalid port entered!");
-		return 1;
-	}
-
 	struct addrinfo *addresses;
 	int addresses_count = get_addresses(argv[1], &addresses);
 	if (addresses_count == 0) {
 		return 1;
 	}
 
-	set_address_ports(addresses, port);
+	int ret = set_address_ports(addresses, argv[2]);
+	if (ret != 0) {
+		return 1;
+	}
 
 	int *sockets = calloc(addresses_count, sizeof(int));
 	char **socket_ips = calloc(addresses_count, sizeof(char*));
@@ -203,82 +213,4 @@ int main(int argc, char **argv)
 		free(socket_ips[i]);
 	}
 	free(socket_ips);
-
-	/*
-	int fd;
-	struct sockaddr_in server_addr;
-	ssize_t len;
-	char buf[BUFFER_SIZE];
-
-    fd = Socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-
-	memset(&server_addr, 0, sizeof(server_addr));
-	server_addr.sin_family = AF_INET;
-#ifdef HAVE_SIN_LEN
-	server_addr.sin_len = sizeof(struct sockaddr_in);
-#endif
-
-	server_addr.sin_port = htons(port);
-	if ((server_addr.sin_addr.s_addr = (in_addr_t)inet_addr(argv[1])) == INADDR_NONE) {
-		fprintf(stderr, "Invalid address\n");
-		return 1;
-	}
-
-    printf("%sConnecting to %s:%s...%s\n", COLOR_CYAN, argv[1], argv[2], COLOR_RESET);
-	Connect(fd, (const struct sockaddr *) &server_addr, sizeof(server_addr));
-    printf("%sConnected to %s:%s%s\n", COLOR_CYAN, argv[1], argv[2], COLOR_RESET);
-
-	fd_set read_fds;
-	int server_closed = 0;
-    int stdin_closed = 0;
-    FD_ZERO(&read_fds);
-    while (!server_closed && !stdin_closed) {
-		FD_SET(fd, &read_fds);
-		FD_SET(STDIN_FILENO, &read_fds);
-		Select(fd + 1, &read_fds, NULL, NULL, NULL);
-
-		if (FD_ISSET(fd, &read_fds)) {
-			len = Recv(fd, (void *) buf, sizeof(buf), 0);
-			if (len <= 0) {
-				server_closed = 1;
-			} else {
-				printf("%s>%s ", COLOR_GREEN, COLOR_RESET);
-                write(STDOUT_FILENO, buf, (size_t)len);
-			}
-		}
-		if (FD_ISSET(STDIN_FILENO, &read_fds)) {
-			len = read(STDIN_FILENO, buf, MESSAGE_SIZE);
-            if (len <= 0) {
-                stdin_closed = 1;
-            } else {
-                Send(fd, (const void *) buf, (size_t)len, 0);
-            }
-		}
-	}
-
-    if (server_closed) {
-        // If the server closed the connection, we are done
-        puts(COLOR_CYAN "Server closed the connection - Stdin was still open." COLOR_RESET);
-        Close(fd);
-        return 0;
-    }
-
-    puts(COLOR_CYAN "Stdin closed - sending FIN to server." COLOR_RESET);
-
-    Shutdown(fd, SHUT_WR);
-
-    // Read any remaining data from the server
-    while (!server_closed) {
-        len = Recv(fd, (void *) buf, sizeof(buf), 0);
-        if (len <= 0) {
-            puts(COLOR_CYAN "Server closed the connection." COLOR_RESET);
-            server_closed = 1;
-        } else {
-            write(STDOUT_FILENO, buf, (size_t)len);
-        }
-    }
-
-    Close(fd);
-	return(0);
-	*/
 }
