@@ -15,12 +15,12 @@
 #define MESSAGE_SIZE (9216)
 
 /**
- * Gets all adresses from a string
+ * Gets all addresses from a string
  * When a Ipv4 address is entered, it can be handled too.
  * 
  * @param name Input string
  * @param result Reference to return the linked list of results
- * @returns the number of entrys avaliable in result 
+ * @returns the number of entries available in result
  */
 int get_addresses(char* name, struct addrinfo** result) {
 	struct addrinfo hints;
