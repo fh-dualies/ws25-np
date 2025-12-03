@@ -22,44 +22,15 @@
  * @param result Reference to return the linked list of results
  * @returns the number of entries available in result
  */
-int get_addresses(char* name, struct addrinfo** result) {
+int get_addresses_port(char* name, char* port, struct addrinfo** result) {
 	struct addrinfo hints;
-
-	in_addr_t addr = inet_addr(name);
-	if (addr != INADDR_NONE) {
-		struct sockaddr_in *sock_addr = calloc(1, sizeof(struct sockaddr_in));
-		if (sock_addr == NULL) {
-			return 0;
-		}
-
-		sock_addr->sin_addr.s_addr = addr;
-		sock_addr->sin_family = AF_INET;
-		#ifdef HAVE_SIN_LEN
-			sock_addr->sin_len = sizeof(struct sockaddr_in);
-		#endif
-
-		struct addrinfo *r = calloc(1, sizeof(struct addrinfo));
-		if (r == NULL) {
-			return 0;
-		}
-		r->ai_family = AF_INET;
-		r->ai_socktype = SOCK_STREAM;
-		r->ai_protocol = IPPROTO_TCP;
-		r->ai_addr = (struct sockaddr *)sock_addr;
-		r->ai_addrlen = sizeof(struct sockaddr_in);
-		r->ai_canonname = NULL;
-		r->ai_next = NULL;
-
-		*result = r;
-		return 1; // Always 1 address
-	}
 
 	memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
 
-	int ret = getaddrinfo(name, NULL, &hints, result);
+	int ret = getaddrinfo(name, port, &hints, result);
     if (ret != 0) {
         printf("getaddrinfo: %s", gai_strerror(ret));
         return 0; // No address
@@ -127,13 +98,8 @@ int main(int argc, char **argv)
 	}
 
 	struct addrinfo *addresses;
-	int addresses_count = get_addresses(argv[1], &addresses);
+	int addresses_count = get_addresses_port(argv[1], argv[2], &addresses);
 	if (addresses_count == 0) {
-		return 1;
-	}
-
-	int ret = set_address_ports(addresses, argv[2]);
-	if (ret != 0) {
 		return 1;
 	}
 
