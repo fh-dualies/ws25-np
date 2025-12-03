@@ -4,6 +4,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 
 int main (int argc, char **argv){
 
@@ -46,7 +47,23 @@ int main (int argc, char **argv){
         } else {
             continue;
         }
-        printf("Host: %s; IPv%d; SocketType: %d;\n", host, ipVersion, entry->ai_socktype);
+        printf("(getnameinfo()) Host: %s; IPv%d; SocketType: %d;\n", host, ipVersion, entry->ai_socktype);
+
+
+        char res[INET6_ADDRSTRLEN];
+        void *addrPtr;
+
+        if (entry->ai_family == AF_INET) {
+            struct sockaddr_in *ipv4 = (struct sockaddr_in *)entry->ai_addr;
+            addrPtr = &(ipv4->sin_addr);
+        } else {
+            struct sockaddr_in6 *ipv6 = (struct sockaddr_in6 *)entry->ai_addr;
+            addrPtr = &(ipv6->sin6_addr);
+        }
+
+        inet_ntop(entry->ai_family, addrPtr, res, sizeof(res));
+
+        printf("(inetntop()) %s \n", res);
     }
     printf("----\n");
 
