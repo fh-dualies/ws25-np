@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <netdb.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
 
 int main (int argc, char **argv){
 

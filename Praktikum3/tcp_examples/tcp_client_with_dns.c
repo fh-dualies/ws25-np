@@ -35,7 +35,7 @@ int get_addresses(char* name, struct addrinfo** result) {
 		sock_addr->sin_addr.s_addr = addr;
 		sock_addr->sin_family = AF_INET;
 		#ifdef HAVE_SIN_LEN
-			addr->sin_len = sizeof(struct sockaddr_in);
+			sock_addr->sin_len = sizeof(struct sockaddr_in);
 		#endif
 
 		struct addrinfo *r = calloc(1, sizeof(struct addrinfo));
