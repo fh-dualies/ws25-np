@@ -38,18 +38,16 @@ int main(int argc, char **argv)
 
     server_addr.sin6_family = AF_INET6;
     server_addr.sin6_port = port;
-    server_addr.sin6_addr = in6addr_loopback;
+    server_addr.sin6_addr = in6addr_any;
     #ifdef HAVE_SIN_LEN
     server_addr.sin6_len = sizeof(struct sockaddr_in6);
     #endif
 
     parent_fd = Socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
-    opt_val = 1;
-    SetSockOpt(parent_fd, SOL_SOCKET, SO_REUSEADDR, (const void *) &opt_val, sizeof(int), true);
     int v6only = 0;
     SetSockOpt(parent_fd, IPPROTO_IPV6, IPV6_V6ONLY, &v6only, sizeof(int), false);
 
-    Bind(parent_fd, (struct sockaddr*)&server_addr, sizeof(struct sockaddr_in6), true);
+    Bind(parent_fd, (struct sockaddr*)&server_addr, sizeof(server_addr), true);
     Listen(parent_fd, 10);
 
     for (;;) {
