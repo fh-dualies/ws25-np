@@ -1,0 +1,24 @@
+# Auto-generated files by GNU Autotools
+aclocal.m4
+autom4te.cache/
+compile
+config.*
+configure
+configure~
+depcomp
+install-sh
+missing
+COPYING
+INSTALL
+
+# Build systems
+Makefile
+Makefile.in
+.deps/
+.dirstamp
+
+# Object files
+*.o
+
+# Executables
+client
