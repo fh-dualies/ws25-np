@@ -106,9 +106,12 @@ void on_stdin(void* arg) {
     }
 }
 
-void send_to_peer(const struct MessageUnknown* data, const size_t total_size) {
+void send_to_peer(struct MessageUnknown* data) {
     // Ensures padding at the end. Padding contents will be random data from the buffer.
+    const size_t total_size = sizeof(struct MessageUnknown) + data->length;
     const size_t padded_size = total_size + (4 - (total_size % 4));
+    data->type = htons(data->type);
+    data->length = htons(data->length);
     memcpy(buffer, data, total_size);
     if (send(state.socket_fd, buffer, padded_size, 0) == -1) {
         perror("send");
@@ -119,11 +122,11 @@ void send_error_message(const uint32_t error_code, const char* error_string) {
     const size_t err_string_size = strlen(error_string);
     const size_t message_size = sizeof(struct MessageError) + err_string_size;
     struct MessageError *msg = malloc(message_size);
-    msg->type = htons(MESSAGE_ERROR_TYPE);
-    msg->length = htons(err_string_size + 4); // +4 to include the error code;
+    msg->type = MESSAGE_ERROR_TYPE;
+    msg->length = err_string_size + 4; // +4 to include the error code;
     msg->error_code = htonl(error_code);
     memcpy(msg->data, error_string, err_string_size);
-    send_to_peer((struct MessageUnknown*) msg, message_size);
+    send_to_peer((struct MessageUnknown*) msg);
     free(msg);
 
 #ifdef DEBUG
@@ -139,12 +142,9 @@ void recv_error_message(struct MessageUnknown* msg) {
     printf("Recieved error message with code %d: %.*s\n", error->error_code, (int)err_string_size, (char *)error->data);
 }
 
-void recv_heartbeat_message(struct MessageUnknown* msg, ssize_t msg_size) {
-    struct MessageHeartbeat *heartbeat = (struct MessageHeartbeat*)msg;
-
-    heartbeat->type = htons(MESSAGE_HEARTBEAT_ACK_TYPE);
-    heartbeat->length = ntohs(heartbeat->length);
-    send_to_peer((const struct MessageUnknown *) heartbeat, msg_size);
+void recv_heartbeat_message(struct MessageUnknown* msg) {
+    msg->type = MESSAGE_HEARTBEAT_ACK_TYPE;
+    send_to_peer(msg);
 #ifdef DEBUG
     fprintf(stderr, "Sent heartbeat ack\n");
 #endif
@@ -183,7 +183,7 @@ void on_message(void* arg) {
             puts("Column ack");
             break;
         case MESSAGE_HEARTBEAT_TYPE:
-            recv_heartbeat_message(message, msg_size);
+            recv_heartbeat_message(message);
             break;
         case MESSAGE_HEARTBEAT_ACK_TYPE:
             puts("Heartbeat ack");
