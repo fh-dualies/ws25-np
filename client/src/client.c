@@ -139,6 +139,17 @@ void recv_error_message(struct MessageUnknown* msg) {
     printf("Recieved error message with code %d: %.*s\n", error->error_code, (int)err_string_size, (char *)error->data);
 }
 
+void recv_heartbeat_message(struct MessageUnknown* msg, ssize_t msg_size) {
+    struct MessageHeartbeat *heartbeat = (struct MessageHeartbeat*)msg;
+
+    heartbeat->type = htons(MESSAGE_HEARTBEAT_ACK_TYPE);
+    heartbeat->length = ntohs(heartbeat->length);
+    send_to_peer((const struct MessageUnknown *) heartbeat, msg_size);
+#ifdef DEBUG
+    fprintf(stderr, "Sent heartbeat ack\n");
+#endif
+}
+
 void on_message(void* arg) {
     const ssize_t msg_size = recv(state.socket_fd, buffer, sizeof(buffer), 0);
     if (msg_size == -1) {
@@ -172,7 +183,7 @@ void on_message(void* arg) {
             puts("Column ack");
             break;
         case MESSAGE_HEARTBEAT_TYPE:
-            puts("Heartbeat");
+            recv_heartbeat_message(message, msg_size);
             break;
         case MESSAGE_HEARTBEAT_ACK_TYPE:
             puts("Heartbeat ack");
