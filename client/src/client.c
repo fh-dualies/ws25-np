@@ -8,9 +8,9 @@
 #include <arpa/inet.h>
 #include <time.h>
 
-#include "src/socket_util.h"
-#include "src/protocol.h"
-#include "lib/cblib.h"
+#include "../src/socket_util.h"
+#include "../src/protocol.h"
+#include "../lib/cblib.h"
 
 char buffer[1<<16];
 int socket_fd = -1;
@@ -21,6 +21,16 @@ time_t last_send_heartbeat = 0;
 struct HeartbeatContent {
     time_t timestamp;
 };
+
+#define DEFAULT_RETRANSMISSION_TIME 1000
+uint32_t next_sequence = 0;
+struct un_ack_column_message {
+    uint32_t sequence;
+    uint16_t column;
+    struct timer *timer;
+    unsigned int next_timeout;
+    struct un_ack_column_message *next;
+} un_ack_column_messages = {0, 0, NULL, 0, NULL};
 
 void on_stdin(void* arg) {
     const ssize_t r = read(STDIN_FILENO, buffer, sizeof(buffer));
@@ -58,14 +68,64 @@ void send_heartbeat(void* arg) {
     start_timer(heartbeat_timer, HEARTBEAT_INTERVAL);
 }
 
+void transmit_column_message(void* arg) {
+    struct un_ack_column_message* un_ack = (struct un_ack_column_message *)arg;
+    struct MessageColumn msg;
+    msg.type = MESSAGE_COLUMN_TYPE;
+    msg.length = sizeof(struct MessageColumn) - sizeof(struct MessageAny);
+    msg.sequence = un_ack->sequence;
+    msg.column = un_ack->column;
+
+    send_message((struct MessageAny *)&msg, socket_fd);
+
+    start_timer(un_ack->timer, un_ack->next_timeout);
+    un_ack->next_timeout *= 2;
+}
+
+void send_column_message(const uint16_t column) {
+    struct un_ack_column_message *queue_item = malloc(sizeof(struct un_ack_column_message));
+    queue_item->sequence = next_sequence;
+    queue_item->column = column;
+    queue_item->timer = create_timer(transmit_column_message, queue_item, "");
+    queue_item->next_timeout = DEFAULT_RETRANSMISSION_TIME;
+    queue_item->next = NULL;
+
+    // Enqueue unacknowledged message
+    struct un_ack_column_message *prev = &un_ack_column_messages;
+    for (; prev->next != NULL; prev = prev->next) {}
+    prev->next = queue_item;
+
+    transmit_column_message(queue_item);
+    next_sequence++;
+}
+
 void on_column_message(struct MessageColumn* msg) {
-    printf("Received column message with sequence %d and column %d\n", ntohl(msg->sequence), ntohs(msg->column));
+    printf("Received column message with sequence %d and column %d\n", msg->sequence, msg->column);
     // TODO: implement game logic here
+
+    // TODO: Temporary implementation
+    struct MessageColumnAck ack;
+    ack.type = MESSAGE_COLUMN_ACK_TYPE;
+    ack.sequence = msg->sequence;
+    ack.length = msg->length;
+    send_message((struct MessageAny *)&ack, socket_fd);
 }
 
 void on_column_ack_message(struct MessageColumnAck* msg) {
-    printf("Received column ack message with sequence %d\n", ntohl(msg->sequence));
-    // TODO: implement ack logic here
+    printf("Received column ack message with sequence %d\n", msg->sequence);
+    for (struct un_ack_column_message *prev = &un_ack_column_messages; prev->next != NULL; prev = prev->next) {
+        struct un_ack_column_message *curr = prev->next;
+        if (curr->sequence == msg->sequence) {
+            prev->next = curr->next;
+            stop_timer(curr->timer);
+            delete_timer(curr->timer);
+            free(curr);
+            return;
+        }
+    }
+#ifdef DEBUG
+    fprintf(stderr, "Received column ack message with sequence %d, but no packet is outstanding\n", msg->sequence);
+#endif
 }
 
 void on_heartbeat_message(struct MessageHeartbeat* msg) {
@@ -86,8 +146,10 @@ void on_heartbeat_ack_message(struct MessageHeartbeat* msg) {
         fprintf(stderr, "Received heartbeat ack with invalid timestamp\n");
         return;
     }
+#ifdef DEBUG
     const time_t rtt = time(NULL) - content->timestamp;
     printf("Received heartbeat ack, RTT: %ld seconds\n", rtt);
+#endif
 }
 
 void on_error_message(struct MessageError* msg) {
@@ -117,6 +179,11 @@ void start_client(const uint16_t own_port, const uint32_t peer_ip, const uint16_
     register_stdin_callback(on_stdin, NULL);
     register_fd_callback(socket_fd, handle_incoming_message, &(socket_fd));
     start_timer(heartbeat_timer, HEARTBEAT_INTERVAL);
+
+    send_column_message(1);
+    send_column_message(12);
+    send_column_message(13);
+    send_column_message(156);
 
     handle_events();
 }
