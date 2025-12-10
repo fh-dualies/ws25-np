@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <arpa/inet.h>
+#include <time.h>
 
 #include "src/socket_util.h"
 #include "src/protocol.h"
@@ -13,6 +14,13 @@
 
 char buffer[1<<16];
 int socket_fd = -1;
+
+#define HEARTBEAT_INTERVAL 5000 // in milliseconds
+static struct timer *heartbeat_timer;
+time_t last_send_heartbeat = 0;
+struct HeartbeatContent {
+    time_t timestamp;
+};
 
 void on_stdin(void* arg) {
     const ssize_t r = read(STDIN_FILENO, buffer, sizeof(buffer));
@@ -39,6 +47,17 @@ void send_error_message(const uint32_t error_code, const char* error_string) {
 #endif
 }
 
+void send_heartbeat(void* arg) {
+    struct MessageHeartbeat* msg = malloc(sizeof(struct MessageHeartbeat) + sizeof(struct HeartbeatContent));
+    struct HeartbeatContent* content = (struct HeartbeatContent*) msg->data;
+    msg->type = MESSAGE_HEARTBEAT_TYPE;
+    msg->length = (sizeof(struct MessageHeartbeat) - sizeof(struct MessageAny)) + sizeof(struct HeartbeatContent);
+    last_send_heartbeat = time(NULL);
+    content->timestamp = last_send_heartbeat;
+    send_message((struct MessageAny *) msg, socket_fd);
+    start_timer(heartbeat_timer, HEARTBEAT_INTERVAL);
+}
+
 void on_column_message(struct MessageColumn* msg) {
     printf("Received column message with sequence %d and column %d\n", ntohl(msg->sequence), ntohs(msg->column));
     // TODO: implement game logic here
@@ -58,8 +77,17 @@ void on_heartbeat_message(struct MessageHeartbeat* msg) {
 }
 
 void on_heartbeat_ack_message(struct MessageHeartbeat* msg) {
-    printf("Received heartbeat ack\n");
-    // TODO: implement heartbeat ack logic here
+    if (msg->length < sizeof(struct HeartbeatContent)) {
+        fprintf(stderr, "Received invalid heartbeat ack message\n");
+        return;
+    }
+    struct HeartbeatContent* content = (struct HeartbeatContent*) msg->data;
+    if (content->timestamp != last_send_heartbeat) {
+        fprintf(stderr, "Received heartbeat ack with invalid timestamp\n");
+        return;
+    }
+    const time_t rtt = time(NULL) - content->timestamp;
+    printf("Received heartbeat ack, RTT: %ld seconds\n", rtt);
 }
 
 void on_error_message(struct MessageError* msg) {
@@ -84,8 +112,11 @@ void start_client(const uint16_t own_port, const uint32_t peer_ip, const uint16_
 
     init_cblib();
 
+    heartbeat_timer = create_timer(send_heartbeat, NULL, "Heartbeat Timer");
+
     register_stdin_callback(on_stdin, NULL);
     register_fd_callback(socket_fd, handle_incoming_message, &(socket_fd));
+    start_timer(heartbeat_timer, HEARTBEAT_INTERVAL);
 
     handle_events();
 }

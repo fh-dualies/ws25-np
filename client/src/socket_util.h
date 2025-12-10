@@ -7,8 +7,8 @@
 
 #include <netinet/in.h>
 
-int create_udp_socket(const uint16_t port);
+int create_udp_socket(uint16_t port);
 
-int connect_peer(int socket_fd, const uint32_t peer_ip, const uint16_t peer_port);
+int connect_peer(int socket_fd, uint32_t peer_ip, uint16_t peer_port);
 
 #endif //SOCKET_UTIL_H
