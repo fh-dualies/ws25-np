@@ -113,6 +113,7 @@ void send_to_peer(struct MessageUnknown* data) {
     data->type = htons(data->type);
     data->length = htons(data->length);
     memcpy(buffer, data, total_size);
+    memset(buffer + total_size, 0, padded_size - total_size); // Zero padding
     if (send(state.socket_fd, buffer, padded_size, 0) == -1) {
         perror("send");
     }
@@ -123,7 +124,7 @@ void send_error_message(const uint32_t error_code, const char* error_string) {
     const size_t message_size = sizeof(struct MessageError) + err_string_size;
     struct MessageError *msg = malloc(message_size);
     msg->type = MESSAGE_ERROR_TYPE;
-    msg->length = err_string_size + 4; // +4 to include the error code;
+    msg->length = message_size - sizeof(struct MessageUnknown);
     msg->error_code = htonl(error_code);
     memcpy(msg->data, error_string, err_string_size);
     send_to_peer((struct MessageUnknown*) msg);
