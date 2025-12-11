@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include "socket_util.h"
 
+struct sockaddr_in server_addr;
+
 int create_udp_socket(const uint16_t port) {
   const int socket_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
   if (socket_fd == -1) {

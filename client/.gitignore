@@ -22,3 +22,7 @@ Makefile.in
 
 # Executables
 client
+/README
+/NEWS
+/ChangeLog
+/AUTHORS

@@ -12,18 +12,22 @@
 #include "../src/protocol.h"
 #include "../lib/cblib.h"
 
+// defines
+#define DEFAULT_RETRANSMISSION_TIME 1000
+#define HEARTBEAT_INTERVAL 5000 // in milliseconds
+
+// global variables
 char buffer[1<<16];
 int socket_fd = -1;
-
-#define HEARTBEAT_INTERVAL 5000 // in milliseconds
-static struct timer *heartbeat_timer;
 time_t last_send_heartbeat = 0;
+uint32_t next_sequence = 0;
+
+// structs
+static struct timer *heartbeat_timer;
 struct HeartbeatContent {
     time_t timestamp;
 };
 
-#define DEFAULT_RETRANSMISSION_TIME 1000
-uint32_t next_sequence = 0;
 struct un_ack_column_message {
     uint32_t sequence;
     uint16_t column;
@@ -31,6 +35,20 @@ struct un_ack_column_message {
     unsigned int next_timeout;
     struct un_ack_column_message *next;
 } un_ack_column_messages = {0, 0, NULL, 0, NULL};
+
+// functions
+void on_stdin(void* arg);
+void send_error_message(const uint32_t error_code, const char* error_string);
+void send_heartbeat(void* arg);
+void transmit_column_message(void* arg);
+void send_column_message(const uint16_t column);
+void on_column_message(struct MessageColumn* msg);
+void on_column_ack_message(struct MessageColumnAck* msg);
+void on_heartbeat_message(struct MessageHeartbeat* msg);
+void on_heartbeat_ack_message(struct MessageHeartbeat* msg);
+void on_error_message(struct MessageError* msg);
+void start_client(const uint16_t own_port, const uint32_t peer_ip, const uint16_t peer_port, const uint16_t start);
+
 
 void on_stdin(void* arg) {
     const ssize_t r = read(STDIN_FILENO, buffer, sizeof(buffer));
@@ -157,7 +175,7 @@ void on_error_message(struct MessageError* msg) {
     printf("Recieved error message with code %d: %.*s\n", msg->error_code, (int)err_string_size, (char *)msg->data);
 }
 
-void start_client(const uint16_t own_port, const uint32_t peer_ip, const uint16_t peer_port) {
+void start_client(const uint16_t own_port, const uint32_t peer_ip, const uint16_t peer_port, const uint16_t start) {
     socket_fd = create_udp_socket(own_port);
     if (socket_fd == -1) return;
 
@@ -189,9 +207,9 @@ void start_client(const uint16_t own_port, const uint32_t peer_ip, const uint16_
 }
 
 int main(int argc, char **argv) {
-    if (argc != 4) {
-        fprintf(stderr, "Usage: ./client <own_port> <peer_ip> <peer_port>");
+    if (argc != 5) {
+        fprintf(stderr, "Usage: ./client <own_port> <peer_ip> <peer_port> <start?>");
     }
 
-    start_client(atoi(argv[1]), inet_addr(argv[2]), atoi(argv[3]));
+    start_client(atoi(argv[1]), inet_addr(argv[2]), atoi(argv[3]), atoi(argv[4]));
 }
