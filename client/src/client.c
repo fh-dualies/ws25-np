@@ -11,6 +11,7 @@
 #include "../src/socket_util.h"
 #include "../src/protocol.h"
 #include "../lib/cblib.h"
+#include "../lib/4clib.h"
 
 // defines
 #define DEFAULT_RETRANSMISSION_TIME 1000
@@ -21,6 +22,7 @@ char buffer[1<<16];
 int socket_fd = -1;
 time_t last_send_heartbeat = 0;
 uint32_t next_sequence = 0;
+enum {TURN, TURN_ACK, WAIT} state;
 
 // structs
 static struct timer *heartbeat_timer;
@@ -54,9 +56,33 @@ void on_stdin(void* arg) {
     const ssize_t r = read(STDIN_FILENO, buffer, sizeof(buffer));
     if (r == -1) {
         perror("read");
-    } else {
-        /* implement sending of data */
+        return;
     }
+
+    int move = atoi(buffer);
+
+    if (state != TURN) {
+        printf("Not your turn yet!\n");
+        fflush(stdout);
+        return;
+    }
+
+    if (!valid_move(move)) {
+        printf("Invalid Move!\n");
+        fflush(stdout);
+        return;
+    }
+
+    send_column_message(move);
+
+    if (winner()) {
+        printf("Wooow you won!!\n");
+        fflush(stdout);
+        exit(0);
+    }
+
+    state = TURN_ACK;
+    fflush(stdout);
 }
 
 void send_error_message(const uint32_t error_code, const char* error_string) {
@@ -119,14 +145,29 @@ void send_column_message(const uint16_t column) {
 
 void on_column_message(struct MessageColumn* msg) {
     printf("Received column message with sequence %d and column %d\n", msg->sequence, msg->column);
-    // TODO: implement game logic here
-
-    // TODO: Temporary implementation
     struct MessageColumnAck ack;
     ack.type = MESSAGE_COLUMN_ACK_TYPE;
     ack.sequence = msg->sequence;
-    ack.length = msg->length;
+    ack.length = sizeof(struct MessageColumnAck) - sizeof(struct MessageAny);
+
     send_message((struct MessageAny *)&ack, socket_fd);
+
+    uint16_t move = msg->column;
+
+    if (!valid_move(move)){
+        printf("Invalid Move!\n");
+        return;
+    }
+
+    make_move(move, PLAYER_2);
+    print_board();
+
+    if(winner()){
+        printf("You Lost :(\n");
+        exit(0);
+    }
+
+    state = TURN;
 }
 
 void on_column_ack_message(struct MessageColumnAck* msg) {
@@ -182,6 +223,12 @@ void start_client(const uint16_t own_port, const uint32_t peer_ip, const uint16_
     if (connect_peer(socket_fd, peer_ip, peer_port) == -1) {
         close(socket_fd);
         return;
+    }
+
+    if (start) {
+        state = TURN;
+    } else {
+        state = WAIT;
     }
 
     cb_message_column(on_column_message);
