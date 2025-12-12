@@ -16,11 +16,13 @@
 // defines
 #define DEFAULT_RETRANSMISSION_TIME 1000
 #define HEARTBEAT_INTERVAL 5000 // in milliseconds
+#define HEARTBEAT_WARNING_MESSAGE_TIMEOUT 30000 // in milliseconds
 
 // global variables
 char buffer[1<<16];
 int socket_fd = -1;
 time_t last_send_heartbeat = 0;
+time_t last_received_heartbeat_time = 0;
 uint32_t next_sequence = 0;
 enum {TURN, TURN_ACK, WAIT} state;
 
@@ -80,13 +82,11 @@ void on_stdin(void* arg) {
 
     if (state != TURN) {
         printf("Not your turn yet!\n");
-        fflush(stdout);
         return;
     }
 
     if (!valid_move(move)) {
         printf("Invalid Move!\n");
-        fflush(stdout);
         return;
     }
 
@@ -96,13 +96,11 @@ void on_stdin(void* arg) {
 
     if (winner()) {
         printf("Wooow you won!!\n");
-        fflush(stdout);
         exit(0);
     }
 
     state = TURN_ACK;
     printf("Wait for turn \n");
-    fflush(stdout);
 }
 
 void send_error_message(const uint32_t error_code, const char* error_string) {
@@ -130,6 +128,10 @@ void send_heartbeat(void* arg) {
     content->timestamp = last_send_heartbeat;
     send_message((struct MessageAny *) msg, socket_fd);
     start_timer(heartbeat_timer, HEARTBEAT_INTERVAL);
+
+    if (last_received_heartbeat_time - time(NULL) > HEARTBEAT_WARNING_MESSAGE_TIMEOUT) {
+        printf("No heartbeat recived since %d seconds. Maybe the other peer disconnected?\n", HEARTBEAT_WARNING_MESSAGE_TIMEOUT / 1000);
+    }
 }
 
 void on_column_message(struct MessageColumn* msg) {
@@ -189,20 +191,23 @@ void on_heartbeat_ack_message(struct MessageHeartbeat* msg) {
         fprintf(stderr, "Received invalid heartbeat ack message\n");
         return;
     }
-    struct HeartbeatContent* content = (struct HeartbeatContent*) msg->data;
-    if (content->timestamp != last_send_heartbeat) {
-        fprintf(stderr, "Received heartbeat ack with invalid timestamp\n");
-        return;
-    }
+
+    last_received_heartbeat_time = time(NULL);
+
 #ifdef DEBUG
-    const time_t rtt = time(NULL) - content->timestamp;
-    printf("Received heartbeat ack, RTT: %ld seconds\n", rtt);
+    struct HeartbeatContent* content = (struct HeartbeatContent*) msg->data;
+    if (content->timestamp == last_send_heartbeat) {
+        const time_t rtt = time(NULL) - content->timestamp;
+        printf("Received heartbeat ack, RTT: %ld seconds\n", rtt);
+    } else {
+        printf("Received heartbeat ack, RTT: N/A\n");
+    }
 #endif
 }
 
 void on_error_message(struct MessageError* msg) {
     const size_t err_string_size = msg->length - 4;
-    printf("Recieved error message with code %d: %.*s\n", msg->error_code, (int)err_string_size, (char *)msg->data);
+    printf("Received error message with code %d: %.*s\n", msg->error_code, (int)err_string_size, (char *)msg->data);
 }
 
 void start_client(const uint16_t own_port, const uint32_t peer_ip, const uint16_t peer_port, const uint16_t start) {
