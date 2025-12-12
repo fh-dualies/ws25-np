@@ -84,6 +84,7 @@ void on_stdin(void* arg) {
     }
 
     state = TURN_ACK;
+    printf("Wait for turn \n");
     fflush(stdout);
 }
 
@@ -170,6 +171,7 @@ void on_column_message(struct MessageColumn* msg) {
     }
 
     state = TURN;
+    printf("Your turn: \n");
 }
 
 void on_column_ack_message(struct MessageColumnAck* msg) {
@@ -177,6 +179,7 @@ void on_column_ack_message(struct MessageColumnAck* msg) {
     for (struct un_ack_column_message *prev = &un_ack_column_messages; prev->next != NULL; prev = prev->next) {
         struct un_ack_column_message *curr = prev->next;
         if (curr->sequence == msg->sequence) {
+            state = WAIT;
             prev->next = curr->next;
             stop_timer(curr->timer);
             delete_timer(curr->timer);
@@ -227,12 +230,6 @@ void start_client(const uint16_t own_port, const uint32_t peer_ip, const uint16_
         return;
     }
 
-    if (start) {
-        state = TURN;
-    } else {
-        state = WAIT;
-    }
-
     cb_message_column(on_column_message);
     cb_message_column_ack(on_column_ack_message);
     cb_message_heartbeat(on_heartbeat_message);
@@ -240,12 +237,22 @@ void start_client(const uint16_t own_port, const uint32_t peer_ip, const uint16_
     cb_message_error(on_error_message);
 
     init_cblib();
+    init_4clib();
+    print_board();
 
     heartbeat_timer = create_timer(send_heartbeat, NULL, "Heartbeat Timer");
 
     register_stdin_callback(on_stdin, NULL);
     register_fd_callback(socket_fd, handle_incoming_message, &(socket_fd));
     start_timer(heartbeat_timer, HEARTBEAT_INTERVAL);
+
+    if (start) {
+        state = TURN;
+        printf("Your turn: \n");
+    } else {
+        state = WAIT;
+        printf("Wait for turn \n");
+    }
 
     handle_events();
 }
