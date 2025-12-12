@@ -260,7 +260,7 @@ void start_client(const uint16_t own_port, const uint32_t peer_ip, const uint16_
 
 int main(int argc, char **argv) {
     if (argc != 5) {
-        fprintf(stderr, "Usage: ./client <own_port> <peer_ip> <peer_port> <start?>");
+        fprintf(stderr, "Usage: ./client <own_port> <peer_ip> <peer_port> <start (0|1)>\n");
     }
 
     start_client(atoi(argv[1]), inet_addr(argv[2]), atoi(argv[3]), atoi(argv[4]));
