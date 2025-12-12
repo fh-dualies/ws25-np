@@ -38,19 +38,36 @@ struct un_ack_column_message {
     struct un_ack_column_message *next;
 } un_ack_column_messages = {0, 0, NULL, 0, NULL};
 
-// functions
-void on_stdin(void* arg);
-void send_error_message(const uint32_t error_code, const char* error_string);
-void send_heartbeat(void* arg);
-void transmit_column_message(void* arg);
-void send_column_message(const uint16_t column);
-void on_column_message(struct MessageColumn* msg);
-void on_column_ack_message(struct MessageColumnAck* msg);
-void on_heartbeat_message(struct MessageHeartbeat* msg);
-void on_heartbeat_ack_message(struct MessageHeartbeat* msg);
-void on_error_message(struct MessageError* msg);
-void start_client(const uint16_t own_port, const uint32_t peer_ip, const uint16_t peer_port, const uint16_t start);
+void transmit_column_message(void* arg) {
+    struct un_ack_column_message* un_ack = (struct un_ack_column_message *)arg;
+    struct MessageColumn msg;
+    msg.type = MESSAGE_COLUMN_TYPE;
+    msg.length = sizeof(struct MessageColumn) - sizeof(struct MessageAny);
+    msg.sequence = un_ack->sequence;
+    msg.column = un_ack->column;
 
+    send_message((struct MessageAny *)&msg, socket_fd);
+
+    start_timer(un_ack->timer, un_ack->next_timeout);
+    un_ack->next_timeout *= 2;
+}
+
+void send_column_message(const uint16_t column) {
+    struct un_ack_column_message *queue_item = malloc(sizeof(struct un_ack_column_message));
+    queue_item->sequence = next_sequence;
+    queue_item->column = column;
+    queue_item->timer = create_timer(transmit_column_message, queue_item, "");
+    queue_item->next_timeout = DEFAULT_RETRANSMISSION_TIME;
+    queue_item->next = NULL;
+
+    // Enqueue unacknowledged message
+    struct un_ack_column_message *prev = &un_ack_column_messages;
+    for (; prev->next != NULL; prev = prev->next) {}
+    prev->next = queue_item;
+
+    transmit_column_message(queue_item);
+    next_sequence++;
+}
 
 void on_stdin(void* arg) {
     const ssize_t r = read(STDIN_FILENO, buffer, sizeof(buffer));
@@ -115,39 +132,7 @@ void send_heartbeat(void* arg) {
     start_timer(heartbeat_timer, HEARTBEAT_INTERVAL);
 }
 
-void transmit_column_message(void* arg) {
-    struct un_ack_column_message* un_ack = (struct un_ack_column_message *)arg;
-    struct MessageColumn msg;
-    msg.type = MESSAGE_COLUMN_TYPE;
-    msg.length = sizeof(struct MessageColumn) - sizeof(struct MessageAny);
-    msg.sequence = un_ack->sequence;
-    msg.column = un_ack->column;
-
-    send_message((struct MessageAny *)&msg, socket_fd);
-
-    start_timer(un_ack->timer, un_ack->next_timeout);
-    un_ack->next_timeout *= 2;
-}
-
-void send_column_message(const uint16_t column) {
-    struct un_ack_column_message *queue_item = malloc(sizeof(struct un_ack_column_message));
-    queue_item->sequence = next_sequence;
-    queue_item->column = column;
-    queue_item->timer = create_timer(transmit_column_message, queue_item, "");
-    queue_item->next_timeout = DEFAULT_RETRANSMISSION_TIME;
-    queue_item->next = NULL;
-
-    // Enqueue unacknowledged message
-    struct un_ack_column_message *prev = &un_ack_column_messages;
-    for (; prev->next != NULL; prev = prev->next) {}
-    prev->next = queue_item;
-
-    transmit_column_message(queue_item);
-    next_sequence++;
-}
-
 void on_column_message(struct MessageColumn* msg) {
-    printf("Received column message with sequence %d and column %d\n", msg->sequence, msg->column);
     struct MessageColumnAck ack;
     ack.type = MESSAGE_COLUMN_ACK_TYPE;
     ack.sequence = msg->sequence;
@@ -175,7 +160,6 @@ void on_column_message(struct MessageColumn* msg) {
 }
 
 void on_column_ack_message(struct MessageColumnAck* msg) {
-    printf("Received column ack message with sequence %d\n", msg->sequence);
     for (struct un_ack_column_message *prev = &un_ack_column_messages; prev->next != NULL; prev = prev->next) {
         struct un_ack_column_message *curr = prev->next;
         if (curr->sequence == msg->sequence) {
