@@ -25,6 +25,7 @@ time_t last_send_heartbeat = 0;
 time_t last_received_heartbeat_time = 0;
 uint32_t next_sequence = 0;
 enum {TURN, TURN_ACK, WAIT} state;
+uint32_t next_expected_sequence = 0;
 
 // structs
 static struct timer *heartbeat_timer;
@@ -137,9 +138,20 @@ void send_heartbeat(void* arg) {
 void on_column_message(struct MessageColumn* msg) {
     struct MessageColumnAck ack;
     ack.type = MESSAGE_COLUMN_ACK_TYPE;
-    ack.sequence = msg->sequence;
     ack.length = sizeof(struct MessageColumnAck) - sizeof(struct MessageAny);
+    if (msg->sequence > next_expected_sequence) {
+        ack.sequence = next_expected_sequence - 1;
+        send_message((struct MessageAny *)&ack, socket_fd);
+        return;
+    } else if (msg->sequence < next_expected_sequence) {
+#ifdef DEBUG
+        fprintf(stderr, "Received old column message. Ignoring!\n");
+#endif
+        return;
+    }
 
+    next_expected_sequence++;
+    ack.sequence = msg->sequence;
     send_message((struct MessageAny *)&ack, socket_fd);
 
     uint16_t move = msg->column;
