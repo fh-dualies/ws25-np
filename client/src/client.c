@@ -73,6 +73,8 @@ void on_stdin(void* arg) {
         return;
     }
 
+    make_move(move, PLAYER_1);
+    print_board();
     send_column_message(move);
 
     if (winner()) {
@@ -244,11 +246,6 @@ void start_client(const uint16_t own_port, const uint32_t peer_ip, const uint16_
     register_stdin_callback(on_stdin, NULL);
     register_fd_callback(socket_fd, handle_incoming_message, &(socket_fd));
     start_timer(heartbeat_timer, HEARTBEAT_INTERVAL);
-
-    send_column_message(1);
-    send_column_message(12);
-    send_column_message(13);
-    send_column_message(156);
 
     handle_events();
 }
