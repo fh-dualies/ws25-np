@@ -105,7 +105,7 @@ void handle_incoming_message(void* arg) {
         break;
       }
       struct MessageColumnAck* msg_column_ack = (struct MessageColumnAck*)msg_converted;
-      msg_column_ack->sequence = ntohs(msg_column_ack->sequence);
+      msg_column_ack->sequence = ntohl(msg_column_ack->sequence);
       g_cb_message_column_ack(msg_column_ack);
       break;
     case MESSAGE_HEARTBEAT_TYPE:
@@ -153,7 +153,7 @@ void send_message(struct MessageAny* msg, int socket_fd) {
     } break;
     case MESSAGE_COLUMN_ACK_TYPE: {
       struct MessageColumnAck *msg_column_ack = (struct MessageColumnAck *) buffer;
-      msg_column_ack->sequence = htons(msg_column_ack->sequence);
+      msg_column_ack->sequence = htonl(msg_column_ack->sequence);
     } break;
     case MESSAGE_ERROR_TYPE: {
       struct MessageError *msg_error = (struct MessageError *) buffer;
