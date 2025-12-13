@@ -75,7 +75,7 @@ void handle_incoming_message(void* arg) {
   uint16_t length = ntohs(message->length);
 
   size_t expected_size = sizeof(struct MessageAny) + length;
-  size_t expected_size_padded = padded_message_size(expected_size);
+  size_t expected_size_padded = padded_message_size((int) expected_size);
   if (recv_size != expected_size_padded) {
     fprintf(stderr, "Message size %ld does not match length %lu\n", recv_size, expected_size_padded);
     return;
@@ -89,6 +89,10 @@ void handle_incoming_message(void* arg) {
   switch (type) {
     case MESSAGE_COLUMN_TYPE:
       assert(g_cb_message_column != NULL);
+      if (length != 6) {
+        fprintf(stderr, "Invalid MESSAGE_COLUMN_TYPE length %u\n", length);
+        break;
+      }
       struct MessageColumn* msg_column = (struct MessageColumn*)msg_converted;
       msg_column->column = ntohs(msg_column->column);
       msg_column->sequence = ntohl(msg_column->sequence);
@@ -96,6 +100,10 @@ void handle_incoming_message(void* arg) {
       break;
     case MESSAGE_COLUMN_ACK_TYPE:
       assert(g_cb_message_column_ack != NULL);
+      if (length != 4) {
+        fprintf(stderr, "Invalid MESSAGE_COLUMN_ACK_TYPE length %u\n", length);
+        break;
+      }
       struct MessageColumnAck* msg_column_ack = (struct MessageColumnAck*)msg_converted;
       msg_column_ack->sequence = ntohs(msg_column_ack->sequence);
       g_cb_message_column_ack(msg_column_ack);
@@ -110,6 +118,10 @@ void handle_incoming_message(void* arg) {
       break;
     case MESSAGE_ERROR_TYPE:
       assert(g_cb_message_error != NULL);
+      if (length < 4) {
+        fprintf(stderr, "Invalid MESSAGE_ERROR_TYPE length %u\n", length);
+        break;
+      }
       struct MessageError* msg_error = (struct MessageError*)msg_converted;
       msg_error->error_code = ntohl(msg_error->error_code);
       g_cb_message_error(msg_error);
@@ -124,7 +136,7 @@ void handle_incoming_message(void* arg) {
 
 void send_message(struct MessageAny* msg, int socket_fd) {
   assert(msg != NULL);
-  size_t message_size = sizeof(struct MessageAny) + msg->length;
+  uint16_t message_size = 4 + msg->length;
   size_t padded_size = padded_message_size(message_size);
   struct MessageAny* buffer = malloc(padded_size);
   memset(buffer, 0, padded_size);

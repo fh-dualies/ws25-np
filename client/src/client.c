@@ -45,7 +45,7 @@ void transmit_column_message(void* arg) {
     struct un_ack_column_message* un_ack = (struct un_ack_column_message *)arg;
     struct MessageColumn msg;
     msg.type = MESSAGE_COLUMN_TYPE;
-    msg.length = sizeof(struct MessageColumn) - sizeof(struct MessageAny);
+    msg.length = 6;
     msg.sequence = un_ack->sequence;
     msg.column = un_ack->column;
 
@@ -109,7 +109,7 @@ void send_error_message(const uint32_t error_code, const char* error_string) {
     const size_t message_size = sizeof(struct MessageError) + err_string_size;
     struct MessageError *msg = malloc(message_size);
     msg->type = MESSAGE_ERROR_TYPE;
-    msg->length = message_size - sizeof(struct MessageAny);
+    msg->length = err_string_size + 4;
     msg->error_code = error_code;
     memcpy(msg->data, error_string, err_string_size);
     send_message((struct MessageAny*) msg, socket_fd);
@@ -124,7 +124,7 @@ void send_heartbeat(void* arg) {
     struct MessageHeartbeat* msg = malloc(sizeof(struct MessageHeartbeat) + sizeof(struct HeartbeatContent));
     struct HeartbeatContent* content = (struct HeartbeatContent*) msg->data;
     msg->type = MESSAGE_HEARTBEAT_TYPE;
-    msg->length = (sizeof(struct MessageHeartbeat) - sizeof(struct MessageAny)) + sizeof(struct HeartbeatContent);
+    msg->length = sizeof(struct HeartbeatContent);
     last_send_heartbeat = time(NULL);
     content->timestamp = last_send_heartbeat;
     send_message((struct MessageAny *) msg, socket_fd);
@@ -138,7 +138,7 @@ void send_heartbeat(void* arg) {
 void on_column_message(struct MessageColumn* msg) {
     struct MessageColumnAck ack;
     ack.type = MESSAGE_COLUMN_ACK_TYPE;
-    ack.length = sizeof(struct MessageColumnAck) - sizeof(struct MessageAny);
+    ack.length = 4;
     if (msg->sequence > next_expected_sequence) {
         ack.sequence = next_expected_sequence - 1;
         send_message((struct MessageAny *)&ack, socket_fd);
