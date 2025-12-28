@@ -278,6 +278,18 @@ void send_message(struct MessageAny* msg, int socket_fd) {
       struct MessageError *msg_error = (struct MessageError *) buffer;
       msg_error->error_code = htonl(msg_error->error_code);
     } break;
+    case MESSAGE_REGISTRATION_TYPE: {
+      struct MessageRegistration *msg_registration = (struct MessageRegistration *) buffer;
+      msg_registration->address = htonl(msg_registration->address);
+      msg_registration->port = htons(msg_registration->port);
+      msg_registration->name_len = htons(msg_registration->name_len);
+      msg_registration->pass_len = htons(msg_registration->pass_len);
+    } break;
+    case MESSAGE_PEER_SELECT_TYPE: {
+      struct MessagePeerSelect *msg_peer_select = (struct MessagePeerSelect *) buffer;
+      msg_peer_select->address = htonl(msg_peer_select->address);
+      msg_peer_select->port = htons(msg_peer_select->port);
+    } break;
     default:
       break;
   }
