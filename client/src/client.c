@@ -226,7 +226,7 @@ void start_client(const uint16_t own_port, const uint32_t peer_ip, const uint16_
     socket_fd = create_udp_socket(own_port);
     if (socket_fd == -1) return;
 
-    if (connect_peer(socket_fd, peer_ip, peer_port) == -1) {
+    if (connect_socket(socket_fd, peer_ip, peer_port) == -1) {
         close(socket_fd);
         return;
     }
