@@ -9,7 +9,7 @@
 #include <time.h>
 
 #include "../src/socket_util.h"
-#include "../src/peer_protocol.h"
+#include "../src/protocol.h"
 #include "../lib/cblib.h"
 #include "../lib/4clib.h"
 
@@ -244,7 +244,7 @@ void start_client(const uint16_t own_port, const uint32_t peer_ip, const uint16_
     heartbeat_timer = create_timer(send_heartbeat, NULL, "Heartbeat Timer");
 
     register_stdin_callback(on_stdin, NULL);
-    register_fd_callback(socket_fd, handle_incoming_message, &(socket_fd));
+    register_fd_callback(socket_fd, handle_udp_message, &(socket_fd));
     start_timer(heartbeat_timer, HEARTBEAT_INTERVAL);
 
     if (start) {

@@ -2,14 +2,16 @@
 // Created by dennis on 10/12/25.
 //
 
-#include "peer_protocol.h"
+#include "protocol.h"
 #include <stddef.h>
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-char recv_buffer[1<<16];
+char udp_recv_buffer[1<<16];
+char tcp_recv_buffer[1<<16];
+size_t tcp_buffer_amount = 0;
 
 static void (*g_cb_message_column)(struct MessageColumn* msg) = NULL;
 static void (*g_cb_message_column_ack)(struct MessageColumnAck* msg) = NULL;
@@ -56,25 +58,62 @@ int padded_message_size(int size) {
   }
 }
 
-void handle_incoming_message(void* arg) {
+void handle_tcp_message(void* arg) {
   assert(arg != NULL);
   int fd = *((int*)arg);
-  const ssize_t recv_size = recv(fd, recv_buffer, sizeof(recv_buffer), 0);
+
+  const ssize_t recv_size = recv(fd, tcp_recv_buffer + tcp_buffer_amount, sizeof(tcp_recv_buffer) - tcp_buffer_amount, 0);
   if (recv_size == -1) {
     perror("recv");
     return;
   }
-  
-  if (recv_size < sizeof (struct MessageAny)) {
-    fprintf(stderr, "Message size %ld smaller than minimum %lu\n", recv_size, sizeof(struct MessageAny));
+
+  tcp_buffer_amount += recv_size;
+
+  while (tcp_buffer_amount >= 32) {
+    struct MessageAny* message = (struct MessageAny*)tcp_recv_buffer;
+    uint16_t type = ntohs(message->type);
+    uint16_t length = ntohs(message->length);
+
+    size_t expected_size = 32 + length;
+    size_t expected_size_padded = padded_message_size((int) expected_size);
+
+    if (tcp_buffer_amount < expected_size_padded) {
+      break;
+    }
+
+    struct MessageAny* msg_converted = malloc(expected_size);
+    memcpy(msg_converted, tcp_recv_buffer, expected_size);
+
+    msg_converted->type = type;
+    msg_converted->length = length;
+    handle_incoming_message(msg_converted);
+
+    memmove(tcp_recv_buffer, tcp_recv_buffer + expected_size_padded, tcp_buffer_amount - expected_size_padded);
+    tcp_buffer_amount -= expected_size_padded;
+  }
+}
+
+void handle_udp_message(void* arg) {
+  assert(arg != NULL);
+  int fd = *((int*)arg);
+
+  const ssize_t recv_size = recv(fd, udp_recv_buffer, sizeof(udp_recv_buffer), 0);
+  if (recv_size == -1) {
+    perror("recv");
     return;
   }
 
-  struct MessageAny* message = (struct MessageAny*)recv_buffer;
+  if (recv_size < 32) {
+    fprintf(stderr, "Message size %ld smaller than minimum %lu\n", recv_size, 32);
+    return;
+  }
+
+  struct MessageAny* message = (struct MessageAny*)udp_recv_buffer;
   uint16_t type = ntohs(message->type);
   uint16_t length = ntohs(message->length);
 
-  size_t expected_size = sizeof(struct MessageAny) + length;
+  size_t expected_size = 32 + length;
   size_t expected_size_padded = padded_message_size((int) expected_size);
   if (recv_size != expected_size_padded) {
     fprintf(stderr, "Message size %ld does not match length %lu\n", recv_size, expected_size_padded);
@@ -82,56 +121,60 @@ void handle_incoming_message(void* arg) {
   }
 
   struct MessageAny* msg_converted = malloc(expected_size);
-  memcpy(msg_converted, recv_buffer, expected_size);
+  memcpy(msg_converted, udp_recv_buffer, expected_size);
+
   msg_converted->type = type;
   msg_converted->length = length;
+  handle_incoming_message(msg_converted);
+}
 
-  switch (type) {
+void handle_incoming_message(struct MessageAny* msg ) {
+  switch (msg->type) {
     case MESSAGE_COLUMN_TYPE:
       assert(g_cb_message_column != NULL);
-      if (length != 6) {
-        fprintf(stderr, "Invalid MESSAGE_COLUMN_TYPE length %u\n", length);
+      if (msg->length != 6) {
+        fprintf(stderr, "Invalid MESSAGE_COLUMN_TYPE length %u\n", msg->length);
         break;
       }
-      struct MessageColumn* msg_column = (struct MessageColumn*)msg_converted;
+      struct MessageColumn* msg_column = (struct MessageColumn*)msg;
       msg_column->column = ntohs(msg_column->column);
       msg_column->sequence = ntohl(msg_column->sequence);
       g_cb_message_column(msg_column);
       break;
     case MESSAGE_COLUMN_ACK_TYPE:
       assert(g_cb_message_column_ack != NULL);
-      if (length != 4) {
-        fprintf(stderr, "Invalid MESSAGE_COLUMN_ACK_TYPE length %u\n", length);
+      if (msg->length != 4) {
+        fprintf(stderr, "Invalid MESSAGE_COLUMN_ACK_TYPE length %u\n", msg->length);
         break;
       }
-      struct MessageColumnAck* msg_column_ack = (struct MessageColumnAck*)msg_converted;
+      struct MessageColumnAck* msg_column_ack = (struct MessageColumnAck*)msg;
       msg_column_ack->sequence = ntohl(msg_column_ack->sequence);
       g_cb_message_column_ack(msg_column_ack);
       break;
     case MESSAGE_HEARTBEAT_TYPE:
       assert(g_cb_message_heartbeat != NULL);
-      g_cb_message_heartbeat((struct MessageHeartbeat*)msg_converted);
+      g_cb_message_heartbeat((struct MessageHeartbeat*)msg);
       break;
     case MESSAGE_HEARTBEAT_ACK_TYPE:
       assert(g_cb_message_heartbeat_ack != NULL);
-      g_cb_message_heartbeat_ack((struct MessageHeartbeat*)msg_converted);
+      g_cb_message_heartbeat_ack((struct MessageHeartbeat*)msg);
       break;
     case MESSAGE_ERROR_TYPE:
       assert(g_cb_message_error != NULL);
-      if (length < 4) {
-        fprintf(stderr, "Invalid MESSAGE_ERROR_TYPE length %u\n", length);
+      if (msg->length < 4) {
+        fprintf(stderr, "Invalid MESSAGE_ERROR_TYPE length %u\n", msg->length);
         break;
       }
-      struct MessageError* msg_error = (struct MessageError*)msg_converted;
+      struct MessageError* msg_error = (struct MessageError*)msg;
       msg_error->error_code = ntohl(msg_error->error_code);
       g_cb_message_error(msg_error);
       break;
     default:
-      fprintf(stderr, "Unknown message type %u\n", type);
+      fprintf(stderr, "Unknown message type %u\n", msg->type);
       break;
   }
 
-  free(msg_converted);
+  free(msg);
 }
 
 void send_message(struct MessageAny* msg, int socket_fd) {
