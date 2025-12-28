@@ -9,7 +9,7 @@
 #include <time.h>
 
 #include "../src/socket_util.h"
-#include "../src/protocol.h"
+#include "../src/peer_protocol.h"
 #include "../lib/cblib.h"
 #include "../lib/4clib.h"
 

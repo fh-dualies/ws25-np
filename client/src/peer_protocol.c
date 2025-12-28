@@ -2,7 +2,7 @@
 // Created by dennis on 10/12/25.
 //
 
-#include "protocol.h"
+#include "peer_protocol.h"
 #include <stddef.h>
 #include <assert.h>
 #include <stdio.h>
