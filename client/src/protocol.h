@@ -86,13 +86,6 @@ struct MessagePeerSelectAck {
     uint16_t length;
 };
 
-struct MessageServerError {
-    uint16_t type;
-    uint16_t length;
-    uint32_t error_code;
-    uint8_t data[];
-};
-
 
 void cb_message_column(void (*callback)(struct MessageColumn* msg));
 

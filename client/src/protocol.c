@@ -18,6 +18,12 @@ static void (*g_cb_message_column_ack)(struct MessageColumnAck* msg) = NULL;
 static void (*g_cb_message_heartbeat)(struct MessageHeartbeat* msg) = NULL;
 static void (*g_cb_message_heartbeat_ack)(struct MessageHeartbeat* msg) = NULL;
 static void (*g_cb_message_error)(struct MessageError* msg) = NULL;
+static void (*g_cb_message_registration)(struct MessageRegistration* msg) = NULL;
+static void (*g_cb_message_registration_ack)(struct MessageRegistrationAck* msg) = NULL;
+static void (*g_cb_message_registration_error_ack)(struct MessageRegistrationErrorAck* msg) = NULL;
+static void (*g_cb_message_peer_select)(struct MessagePeerSelect* msg) = NULL;
+static void (*g_cb_message_peer_select_ack)(struct MessagePeerSelectAck* msg) = NULL;
+
 
 void cb_message_column(void (*callback)(struct MessageColumn* msg)) {
   assert(callback != NULL);
@@ -47,6 +53,36 @@ void cb_message_error(void (*callback)(struct MessageError* msg)) {
   assert(callback != NULL);
   assert(g_cb_message_error == NULL);
   g_cb_message_error = callback;
+}
+
+void cb_message_registration(void (*callback)(struct MessageRegistration* msg)) {
+  assert(callback != NULL);
+  assert(g_cb_message_registration == NULL);
+  g_cb_message_registration = callback;
+}
+
+void cb_message_registration_ack(void (*callback)(struct MessageRegistrationAck* msg)) {
+  assert(callback != NULL);
+  assert(g_cb_message_registration_ack == NULL);
+  g_cb_message_registration_ack = callback;
+}
+
+void cb_message_registration_error_ack(void (*callback)(struct MessageRegistrationErrorAck* msg)) {
+  assert(callback != NULL);
+  assert(g_cb_message_registration_error_ack == NULL);
+  g_cb_message_registration_error_ack = callback;
+}
+
+void cb_message_peer_select(void (*callback)(struct MessagePeerSelect* msg)) {
+  assert(callback != NULL);
+  assert(g_cb_message_peer_select == NULL);
+  g_cb_message_peer_select = callback;
+}
+
+void cb_message_peer_select_ack(void (*callback)(struct MessagePeerSelectAck* msg)) {
+  assert(callback != NULL);
+  assert(g_cb_message_peer_select_ack == NULL);
+  g_cb_message_peer_select_ack = callback;
 }
 
 int padded_message_size(int size) {
@@ -168,6 +204,46 @@ void handle_incoming_message(struct MessageAny* msg ) {
       struct MessageError* msg_error = (struct MessageError*)msg;
       msg_error->error_code = ntohl(msg_error->error_code);
       g_cb_message_error(msg_error);
+      break;
+    case MESSAGE_REGISTRATION_TYPE:
+      assert(g_cb_message_registration != NULL);
+      if (msg->length < 10) {
+        fprintf(stderr, "Invalid MESSAGE_ERROR_TYPE length %u\n", msg->length);
+        break;
+      }
+      struct MessageRegistration* msg_reg = (struct MessageRegistration*)msg;
+      msg_reg->address = ntohl(msg_reg->address);
+      msg_reg->port = ntohs(msg_reg->port);
+      msg_reg->name_len = ntohs(msg_reg->name_len);
+      msg_reg->pass_len = ntohs(msg_reg->pass_len);
+      if (msg->length != 10 + msg_reg->name_len + msg_reg->pass_len) {
+        fprintf(stderr, "Invalid MESSAGE_ERROR_TYPE length %u\n", msg->length);
+        break;
+      }
+      g_cb_message_registration(msg_reg);
+      break;
+    case MESSAGE_REGISTRATION_ACK_TYPE:
+      assert(g_cb_message_registration_ack != NULL);
+      g_cb_message_registration_ack((struct MessageRegistrationAck*)msg);
+      break;
+    case MESSAGE_REGISTRATION_ERR_ACK_TYPE:
+      assert(g_cb_message_registration_error_ack != NULL);
+      g_cb_message_registration_error_ack((struct MessageRegistrationErrorAck*)msg);
+      break;
+    case MESSAGE_PEER_SELECT_TYPE:
+      assert(g_cb_message_peer_select != NULL);
+      if (msg->length < 10) {
+        fprintf(stderr, "Invalid MESSAGE_ERROR_TYPE length %u\n", msg->length);
+        break;
+      }
+      struct MessagePeerSelect* msg_peer_select = (struct MessagePeerSelect*)msg;
+      msg_peer_select->address = ntohl(msg_peer_select->address);
+      msg_peer_select->port = ntohs(msg_peer_select->port);
+      g_cb_message_peer_select(msg_peer_select);
+      break;
+    case MESSAGE_PEER_SELECT_ACK_TYPE:
+      assert(g_cb_message_peer_select_ack != NULL);
+      g_cb_message_peer_select_ack((struct MessagePeerSelectAck*)msg);
       break;
     default:
       fprintf(stderr, "Unknown message type %u\n", msg->type);
