@@ -86,26 +86,46 @@ struct MessagePeerSelectAck {
     uint16_t length;
 };
 
+#define HANDLE_MESSAGE_BUFFER_DEFINITION(name, size) \
+  char name##data[size]; \
+  struct HandleMessageBuffer name = { \
+    .buff_size = size, \
+    .filled_size = 0, \
+    .data = &(name##data) \
+  };
 
-void cb_message_column(void (*callback)(struct MessageColumn* msg));
+struct HandleMessageBuffer {
+    size_t buff_size;
+    size_t filled_size;
+    uint8_t *data;
+};
 
-void cb_message_column_ack(void (*callback)(struct MessageColumnAck* msg));
+struct HandleMessageParams {
+    int fd;
+    struct HandleMessageBuffer *buffer;
+};
 
-void cb_message_heartbeat(void (*callback)(struct MessageHeartbeat* msg));
+void cb_message_column(void (*callback)(struct MessageColumn* msg, int fd));
 
-void cb_message_heartbeat_ack(void (*callback)(struct MessageHeartbeat* msg));
+void cb_message_column_ack(void (*callback)(struct MessageColumnAck* msg, int fd));
 
-void cb_message_error(void (*callback)(struct MessageError* msg));
+void cb_message_heartbeat(void (*callback)(struct MessageHeartbeat* msg, int fd));
 
-void cb_message_registration(void (*callback)(struct MessageRegistration* msg));
+void cb_message_heartbeat_ack(void (*callback)(struct MessageHeartbeat* msg, int fd));
 
-void cb_message_registration_ack(void (*callback)(struct MessageRegistrationAck* msg));
+void cb_message_error(void (*callback)(struct MessageError* msg, int fd));
 
-void cb_message_registration_error_ack(void (*callback)(struct MessageRegistrationErrorAck* msg));
+void cb_message_registration(void (*callback)(struct MessageRegistration* msg, int fd));
 
-void cb_message_peer_select(void (*callback)(struct MessagePeerSelect* msg));
+void cb_message_registration_ack(void (*callback)(struct MessageRegistrationAck* msg, int fd));
 
-void cb_message_peer_select_ack(void (*callback)(struct MessagePeerSelectAck* msg));
+void cb_message_registration_error_ack(void (*callback)(struct MessageRegistrationErrorAck* msg, int fd));
+
+void cb_message_peer_select(void (*callback)(struct MessagePeerSelect* msg, int fd));
+
+void cb_message_peer_select_ack(void (*callback)(struct MessagePeerSelectAck* msg, int fd));
+
+void cb_tcp_closed(void (*callback)(void* args, int fd));
 
 void handle_tcp_message(void* arg);
 

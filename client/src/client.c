@@ -19,7 +19,7 @@
 #define HEARTBEAT_WARNING_MESSAGE_TIMEOUT 30000 // in milliseconds
 
 // global variables
-char buffer[1<<16];
+char stdin_buffer[1<<16];
 int socket_fd = -1;
 time_t last_send_heartbeat = 0;
 time_t last_received_heartbeat_time = 0;
@@ -73,13 +73,13 @@ void send_column_message(const uint16_t column) {
 }
 
 void on_stdin(void* arg) {
-    const ssize_t r = read(STDIN_FILENO, buffer, sizeof(buffer));
+    const ssize_t r = read(STDIN_FILENO, stdin_buffer, sizeof(stdin_buffer));
     if (r == -1) {
         perror("read");
         return;
     }
 
-    int move = atoi(buffer);
+    int move = atoi(stdin_buffer);
 
     if (state != TURN) {
         printf("Not your turn yet!\n");
@@ -135,7 +135,7 @@ void send_heartbeat(void* arg) {
     }
 }
 
-void on_column_message(struct MessageColumn* msg) {
+void on_column_message(struct MessageColumn* msg, int fd) {
     struct MessageColumnAck ack;
     ack.type = MESSAGE_COLUMN_ACK_TYPE;
     ack.length = 4;
@@ -173,7 +173,7 @@ void on_column_message(struct MessageColumn* msg) {
     printf("Your turn: \n");
 }
 
-void on_column_ack_message(struct MessageColumnAck* msg) {
+void on_column_ack_message(struct MessageColumnAck* msg, int fd) {
     for (struct un_ack_column_message *prev = &un_ack_column_messages; prev->next != NULL; prev = prev->next) {
         struct un_ack_column_message *curr = prev->next;
         if (curr->sequence == msg->sequence) {
@@ -190,7 +190,7 @@ void on_column_ack_message(struct MessageColumnAck* msg) {
 #endif
 }
 
-void on_heartbeat_message(struct MessageHeartbeat* msg) {
+void on_heartbeat_message(struct MessageHeartbeat* msg, int fd) {
     msg->type = MESSAGE_HEARTBEAT_ACK_TYPE;
     send_message((struct MessageAny *) msg, socket_fd);
 #ifdef DEBUG
@@ -198,7 +198,7 @@ void on_heartbeat_message(struct MessageHeartbeat* msg) {
 #endif
 }
 
-void on_heartbeat_ack_message(struct MessageHeartbeat* msg) {
+void on_heartbeat_ack_message(struct MessageHeartbeat* msg, int fd) {
     if (msg->length < sizeof(struct HeartbeatContent)) {
         fprintf(stderr, "Received invalid heartbeat ack message\n");
         return;
@@ -217,7 +217,7 @@ void on_heartbeat_ack_message(struct MessageHeartbeat* msg) {
 #endif
 }
 
-void on_error_message(struct MessageError* msg) {
+void on_error_message(struct MessageError* msg, int fd) {
     const size_t err_string_size = msg->length - 4;
     printf("Received error message with code %d: %.*s\n", msg->error_code, (int)err_string_size, (char *)msg->data);
 }
@@ -244,7 +244,11 @@ void start_client(const uint16_t own_port, const uint32_t peer_ip, const uint16_
     heartbeat_timer = create_timer(send_heartbeat, NULL, "Heartbeat Timer");
 
     register_stdin_callback(on_stdin, NULL);
-    register_fd_callback(socket_fd, handle_udp_message, &(socket_fd));
+    struct HandleMessageParams handle_upd_params = {
+        .fd = socket_fd,
+        .buffer = NULL // Use default buffer
+    };
+    register_fd_callback(socket_fd, handle_udp_message, &handle_upd_params);
     start_timer(heartbeat_timer, HEARTBEAT_INTERVAL);
 
     if (start) {

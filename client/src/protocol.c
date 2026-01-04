@@ -9,81 +9,26 @@
 #include <stdlib.h>
 #include <string.h>
 
-char udp_recv_buffer[1<<16];
-char tcp_recv_buffer[1<<16];
-size_t tcp_buffer_amount = 0;
+#define CB(NAME, TYPE)  static void (*g_##NAME)(TYPE* msg, int fd) = NULL; \
+  void NAME(void (*callback)(TYPE* msg, int fd)) { \
+    assert(callback != NULL); \
+    assert(g_##NAME == NULL); \
+    g_##NAME = callback; \
+  }
 
-static void (*g_cb_message_column)(struct MessageColumn* msg) = NULL;
-static void (*g_cb_message_column_ack)(struct MessageColumnAck* msg) = NULL;
-static void (*g_cb_message_heartbeat)(struct MessageHeartbeat* msg) = NULL;
-static void (*g_cb_message_heartbeat_ack)(struct MessageHeartbeat* msg) = NULL;
-static void (*g_cb_message_error)(struct MessageError* msg) = NULL;
-static void (*g_cb_message_registration)(struct MessageRegistration* msg) = NULL;
-static void (*g_cb_message_registration_ack)(struct MessageRegistrationAck* msg) = NULL;
-static void (*g_cb_message_registration_error_ack)(struct MessageRegistrationErrorAck* msg) = NULL;
-static void (*g_cb_message_peer_select)(struct MessagePeerSelect* msg) = NULL;
-static void (*g_cb_message_peer_select_ack)(struct MessagePeerSelectAck* msg) = NULL;
+HANDLE_MESSAGE_BUFFER_DEFINITION(default_buffer, 1<<16)
 
-
-void cb_message_column(void (*callback)(struct MessageColumn* msg)) {
-  assert(callback != NULL);
-  assert(g_cb_message_column == NULL);
-  g_cb_message_column = callback;
-}
-
-void cb_message_column_ack(void (*callback)(struct MessageColumnAck* msg)) {
-  assert(callback != NULL);
-  assert(g_cb_message_column_ack == NULL);
-  g_cb_message_column_ack = callback;
-}
-
-void cb_message_heartbeat(void (*callback)(struct MessageHeartbeat* msg)) {
-  assert(callback != NULL);
-  assert(g_cb_message_heartbeat == NULL);
-  g_cb_message_heartbeat = callback;
-}
-
-void cb_message_heartbeat_ack(void (*callback)(struct MessageHeartbeat* msg)) {
-  assert(callback != NULL);
-  assert(g_cb_message_heartbeat_ack == NULL);
-  g_cb_message_heartbeat_ack = callback;
-}
-
-void cb_message_error(void (*callback)(struct MessageError* msg)) {
-  assert(callback != NULL);
-  assert(g_cb_message_error == NULL);
-  g_cb_message_error = callback;
-}
-
-void cb_message_registration(void (*callback)(struct MessageRegistration* msg)) {
-  assert(callback != NULL);
-  assert(g_cb_message_registration == NULL);
-  g_cb_message_registration = callback;
-}
-
-void cb_message_registration_ack(void (*callback)(struct MessageRegistrationAck* msg)) {
-  assert(callback != NULL);
-  assert(g_cb_message_registration_ack == NULL);
-  g_cb_message_registration_ack = callback;
-}
-
-void cb_message_registration_error_ack(void (*callback)(struct MessageRegistrationErrorAck* msg)) {
-  assert(callback != NULL);
-  assert(g_cb_message_registration_error_ack == NULL);
-  g_cb_message_registration_error_ack = callback;
-}
-
-void cb_message_peer_select(void (*callback)(struct MessagePeerSelect* msg)) {
-  assert(callback != NULL);
-  assert(g_cb_message_peer_select == NULL);
-  g_cb_message_peer_select = callback;
-}
-
-void cb_message_peer_select_ack(void (*callback)(struct MessagePeerSelectAck* msg)) {
-  assert(callback != NULL);
-  assert(g_cb_message_peer_select_ack == NULL);
-  g_cb_message_peer_select_ack = callback;
-}
+CB(cb_message_column, struct MessageColumn);
+CB(cb_message_column_ack, struct MessageColumnAck);
+CB(cb_message_heartbeat, struct MessageHeartbeat);
+CB(cb_message_heartbeat_ack, struct MessageHeartbeat);
+CB(cb_message_error, struct MessageError);
+CB(cb_message_registration, struct MessageRegistration);
+CB(cb_message_registration_ack, struct MessageRegistrationAck);
+CB(cb_message_registration_error_ack, struct MessageRegistrationErrorAck);
+CB(cb_message_peer_select, struct MessagePeerSelect);
+CB(cb_message_peer_select_ack, struct MessagePeerSelectAck);
+CB(cb_tcp_closed, void);
 
 int padded_message_size(int size) {
   int remainder = size % 4;
@@ -96,45 +41,62 @@ int padded_message_size(int size) {
 
 void handle_tcp_message(void* arg) {
   assert(arg != NULL);
-  int fd = *((int*)arg);
+  struct HandleMessageParams *params = arg;
+  int fd = params->fd;
+  struct HandleMessageBuffer *buffer = params->buffer;
+  if(buffer == NULL) {
+    buffer = &default_buffer;
+  }
 
-  const ssize_t recv_size = recv(fd, tcp_recv_buffer + tcp_buffer_amount, sizeof(tcp_recv_buffer) - tcp_buffer_amount, 0);
+  const ssize_t recv_size = recv(fd, buffer->data + buffer->filled_size, buffer->buff_size - buffer->filled_size, 0);
   if (recv_size == -1) {
     perror("recv");
     return;
   }
 
-  tcp_buffer_amount += recv_size;
+  if (recv_size == 0) {
+    g_cb_tcp_closed(NULL, fd);
+    return;
+  }
 
-  while (tcp_buffer_amount >= 32) {
-    struct MessageAny* message = (struct MessageAny*)tcp_recv_buffer;
+  buffer->filled_size += recv_size;
+
+  while (buffer->filled_size >= 32) {
+    struct MessageAny* message = (struct MessageAny*)buffer->data;
     uint16_t type = ntohs(message->type);
     uint16_t length = ntohs(message->length);
 
     size_t expected_size = 32 + length;
     size_t expected_size_padded = padded_message_size((int) expected_size);
 
-    if (tcp_buffer_amount < expected_size_padded) {
+    if (buffer->filled_size < expected_size_padded) {
       break;
     }
 
     struct MessageAny* msg_converted = malloc(expected_size);
-    memcpy(msg_converted, tcp_recv_buffer, expected_size);
+    memcpy(msg_converted, buffer->data, expected_size);
 
     msg_converted->type = type;
     msg_converted->length = length;
-    handle_incoming_message(msg_converted);
+    handle_incoming_message(msg_converted, fd);
 
-    memmove(tcp_recv_buffer, tcp_recv_buffer + expected_size_padded, tcp_buffer_amount - expected_size_padded);
-    tcp_buffer_amount -= expected_size_padded;
+    memmove(buffer->data, buffer->data + expected_size_padded, buffer->filled_size - expected_size_padded);
+    buffer->filled_size -= expected_size_padded;
   }
 }
 
 void handle_udp_message(void* arg) {
   assert(arg != NULL);
-  int fd = *((int*)arg);
+  struct HandleMessageParams *params = arg;
+  int fd = params->fd;
+  struct HandleMessageBuffer *buffer = params->buffer;
+  if(buffer == NULL) {
+    buffer = &default_buffer;
+  }
 
-  const ssize_t recv_size = recv(fd, udp_recv_buffer, sizeof(udp_recv_buffer), 0);
+  assert(buffer->filled_size == 0); // There should be no content in the buffer for a UDP connection !
+
+  const ssize_t recv_size = recv(fd, buffer->data, buffer->buff_size, 0);
   if (recv_size == -1) {
     perror("recv");
     return;
@@ -145,7 +107,7 @@ void handle_udp_message(void* arg) {
     return;
   }
 
-  struct MessageAny* message = (struct MessageAny*)udp_recv_buffer;
+  struct MessageAny* message = (struct MessageAny*)buffer->data;
   uint16_t type = ntohs(message->type);
   uint16_t length = ntohs(message->length);
 
@@ -157,14 +119,14 @@ void handle_udp_message(void* arg) {
   }
 
   struct MessageAny* msg_converted = malloc(expected_size);
-  memcpy(msg_converted, udp_recv_buffer, expected_size);
+  memcpy(msg_converted, buffer->data, expected_size);
 
   msg_converted->type = type;
   msg_converted->length = length;
-  handle_incoming_message(msg_converted);
+  handle_incoming_message(msg_converted, fd);
 }
 
-void handle_incoming_message(struct MessageAny* msg ) {
+void handle_incoming_message(struct MessageAny* msg, int fd) {
   switch (msg->type) {
     case MESSAGE_COLUMN_TYPE:
       assert(g_cb_message_column != NULL);
@@ -175,7 +137,7 @@ void handle_incoming_message(struct MessageAny* msg ) {
       struct MessageColumn* msg_column = (struct MessageColumn*)msg;
       msg_column->column = ntohs(msg_column->column);
       msg_column->sequence = ntohl(msg_column->sequence);
-      g_cb_message_column(msg_column);
+      g_cb_message_column(msg_column, fd);
       break;
     case MESSAGE_COLUMN_ACK_TYPE:
       assert(g_cb_message_column_ack != NULL);
@@ -185,15 +147,15 @@ void handle_incoming_message(struct MessageAny* msg ) {
       }
       struct MessageColumnAck* msg_column_ack = (struct MessageColumnAck*)msg;
       msg_column_ack->sequence = ntohl(msg_column_ack->sequence);
-      g_cb_message_column_ack(msg_column_ack);
+      g_cb_message_column_ack(msg_column_ack, fd);
       break;
     case MESSAGE_HEARTBEAT_TYPE:
       assert(g_cb_message_heartbeat != NULL);
-      g_cb_message_heartbeat((struct MessageHeartbeat*)msg);
+      g_cb_message_heartbeat((struct MessageHeartbeat*)msg, fd);
       break;
     case MESSAGE_HEARTBEAT_ACK_TYPE:
       assert(g_cb_message_heartbeat_ack != NULL);
-      g_cb_message_heartbeat_ack((struct MessageHeartbeat*)msg);
+      g_cb_message_heartbeat_ack((struct MessageHeartbeat*)msg, fd);
       break;
     case MESSAGE_ERROR_TYPE:
       assert(g_cb_message_error != NULL);
@@ -203,7 +165,7 @@ void handle_incoming_message(struct MessageAny* msg ) {
       }
       struct MessageError* msg_error = (struct MessageError*)msg;
       msg_error->error_code = ntohl(msg_error->error_code);
-      g_cb_message_error(msg_error);
+      g_cb_message_error(msg_error, fd);
       break;
     case MESSAGE_REGISTRATION_TYPE:
       assert(g_cb_message_registration != NULL);
@@ -220,15 +182,15 @@ void handle_incoming_message(struct MessageAny* msg ) {
         fprintf(stderr, "Invalid MESSAGE_ERROR_TYPE length %u\n", msg->length);
         break;
       }
-      g_cb_message_registration(msg_reg);
+      g_cb_message_registration(msg_reg, fd);
       break;
     case MESSAGE_REGISTRATION_ACK_TYPE:
       assert(g_cb_message_registration_ack != NULL);
-      g_cb_message_registration_ack((struct MessageRegistrationAck*)msg);
+      g_cb_message_registration_ack((struct MessageRegistrationAck*)msg, fd);
       break;
     case MESSAGE_REGISTRATION_ERR_ACK_TYPE:
       assert(g_cb_message_registration_error_ack != NULL);
-      g_cb_message_registration_error_ack((struct MessageRegistrationErrorAck*)msg);
+      g_cb_message_registration_error_ack((struct MessageRegistrationErrorAck*)msg, fd);
       break;
     case MESSAGE_PEER_SELECT_TYPE:
       assert(g_cb_message_peer_select != NULL);
@@ -239,11 +201,11 @@ void handle_incoming_message(struct MessageAny* msg ) {
       struct MessagePeerSelect* msg_peer_select = (struct MessagePeerSelect*)msg;
       msg_peer_select->address = ntohl(msg_peer_select->address);
       msg_peer_select->port = ntohs(msg_peer_select->port);
-      g_cb_message_peer_select(msg_peer_select);
+      g_cb_message_peer_select(msg_peer_select, fd);
       break;
     case MESSAGE_PEER_SELECT_ACK_TYPE:
       assert(g_cb_message_peer_select_ack != NULL);
-      g_cb_message_peer_select_ack((struct MessagePeerSelectAck*)msg);
+      g_cb_message_peer_select_ack((struct MessagePeerSelectAck*)msg, fd);
       break;
     default:
       fprintf(stderr, "Unknown message type %u\n", msg->type);
