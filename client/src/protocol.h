@@ -86,12 +86,12 @@ struct MessagePeerSelectAck {
     uint16_t length;
 };
 
-#define HANDLE_MESSAGE_BUFFER_DEFINITION(name, size) \
-  char name##data[size]; \
-  struct HandleMessageBuffer name = { \
-    .buff_size = size, \
+#define HANDLE_MESSAGE_BUFFER_DEFINITION(NAME, SIZE) \
+  uint8_t NAME##data[SIZE]; \
+  struct HandleMessageBuffer NAME = { \
+    .buff_size = SIZE, \
     .filled_size = 0, \
-    .data = &(name##data) \
+    .data = NAME##data \
   };
 
 struct HandleMessageBuffer {
@@ -132,5 +132,7 @@ void handle_tcp_message(void* arg);
 void handle_udp_message(void* arg);
 
 void send_message(struct MessageAny* msg, int socket_fd);
+
+void send_error_message(const uint32_t error_code, const char* error_string, int fd);
 
 #endif //PROTOCOL_H

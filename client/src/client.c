@@ -104,22 +104,6 @@ void on_stdin(void* arg) {
     printf("Wait for turn \n");
 }
 
-void send_error_message(const uint32_t error_code, const char* error_string) {
-    const size_t err_string_size = strlen(error_string);
-    const size_t message_size = sizeof(struct MessageError) + err_string_size;
-    struct MessageError *msg = malloc(message_size);
-    msg->type = MESSAGE_ERROR_TYPE;
-    msg->length = err_string_size + 4;
-    msg->error_code = error_code;
-    memcpy(msg->data, error_string, err_string_size);
-    send_message((struct MessageAny*) msg, socket_fd);
-    free(msg);
-
-#ifdef DEBUG
-    fprintf(stderr, "Send error message with code %d to Peer: %s", error_code, error_string);
-#endif
-}
-
 void send_heartbeat(void* arg) {
     struct MessageHeartbeat* msg = malloc(sizeof(struct MessageHeartbeat) + sizeof(struct HeartbeatContent));
     struct HeartbeatContent* content = (struct HeartbeatContent*) msg->data;

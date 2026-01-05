@@ -12,23 +12,30 @@
 #define CB(NAME, TYPE)  static void (*g_##NAME)(TYPE* msg, int fd) = NULL; \
   void NAME(void (*callback)(TYPE* msg, int fd)) { \
     assert(callback != NULL); \
-    assert(g_##NAME == NULL); \
     g_##NAME = callback; \
+  }
+
+#define CALL_CB(NAME, MSG, FD) \
+  if(g_##NAME != NULL) { \
+    g_##NAME(MSG, FD); \
+  } else if (g_cb_message_default) { \
+    g_cb_message_default((struct MessageAny *) MSG, FD); \
   }
 
 HANDLE_MESSAGE_BUFFER_DEFINITION(default_buffer, 1<<16)
 
-CB(cb_message_column, struct MessageColumn);
-CB(cb_message_column_ack, struct MessageColumnAck);
-CB(cb_message_heartbeat, struct MessageHeartbeat);
-CB(cb_message_heartbeat_ack, struct MessageHeartbeat);
-CB(cb_message_error, struct MessageError);
-CB(cb_message_registration, struct MessageRegistration);
-CB(cb_message_registration_ack, struct MessageRegistrationAck);
-CB(cb_message_registration_error_ack, struct MessageRegistrationErrorAck);
-CB(cb_message_peer_select, struct MessagePeerSelect);
-CB(cb_message_peer_select_ack, struct MessagePeerSelectAck);
-CB(cb_tcp_closed, void);
+CB(cb_message_column, struct MessageColumn)
+CB(cb_message_column_ack, struct MessageColumnAck)
+CB(cb_message_heartbeat, struct MessageHeartbeat)
+CB(cb_message_heartbeat_ack, struct MessageHeartbeat)
+CB(cb_message_error, struct MessageError)
+CB(cb_message_registration, struct MessageRegistration)
+CB(cb_message_registration_ack, struct MessageRegistrationAck)
+CB(cb_message_registration_error_ack, struct MessageRegistrationErrorAck)
+CB(cb_message_peer_select, struct MessagePeerSelect)
+CB(cb_message_peer_select_ack, struct MessagePeerSelectAck)
+CB(cb_tcp_closed, void)
+CB(cb_message_default, struct MessageAny)
 
 int padded_message_size(int size) {
   int remainder = size % 4;
@@ -38,6 +45,71 @@ int padded_message_size(int size) {
     return size + (4 - remainder);
   }
 }
+
+void handle_incoming_message(struct MessageAny* msg, int fd) {
+  switch (msg->type) {
+    case MESSAGE_COLUMN_TYPE:
+      if (msg->length != 6) break;
+      struct MessageColumn* msg_column = (struct MessageColumn*)msg;
+      msg_column->column = ntohs(msg_column->column);
+      msg_column->sequence = ntohl(msg_column->sequence);
+      CALL_CB(cb_message_column, msg_column, fd)
+      break;
+    case MESSAGE_COLUMN_ACK_TYPE:
+      if (msg->length != 4) break;
+      struct MessageColumnAck* msg_column_ack = (struct MessageColumnAck*)msg;
+      msg_column_ack->sequence = ntohl(msg_column_ack->sequence);
+      CALL_CB(cb_message_column_ack, msg_column_ack, fd)
+      break;
+    case MESSAGE_HEARTBEAT_TYPE:
+      CALL_CB(cb_message_heartbeat, (struct MessageHeartbeat*)msg, fd)
+      break;
+    case MESSAGE_HEARTBEAT_ACK_TYPE:
+      CALL_CB(cb_message_heartbeat_ack, (struct MessageHeartbeat*)msg, fd)
+      break;
+    case MESSAGE_ERROR_TYPE:
+      if (msg->length < 4) break;
+      struct MessageError* msg_error = (struct MessageError*)msg;
+      msg_error->error_code = ntohl(msg_error->error_code);
+      CALL_CB(cb_message_error, msg_error, fd)
+      break;
+    case MESSAGE_REGISTRATION_TYPE:
+      if (msg->length < 10) break;
+      struct MessageRegistration* msg_reg = (struct MessageRegistration*)msg;
+      msg_reg->address = ntohl(msg_reg->address);
+      msg_reg->port = ntohs(msg_reg->port);
+      msg_reg->name_len = ntohs(msg_reg->name_len);
+      msg_reg->pass_len = ntohs(msg_reg->pass_len);
+      if (msg->length != 10 + msg_reg->name_len + msg_reg->pass_len) break;
+      CALL_CB(cb_message_registration, msg_reg, fd)
+      break;
+    case MESSAGE_REGISTRATION_ACK_TYPE:
+      if(msg->length != 0) break;
+      CALL_CB(cb_message_registration_ack, (struct MessageRegistrationAck*)msg, fd)
+      break;
+    case MESSAGE_REGISTRATION_ERR_ACK_TYPE:
+      if(msg->length != 0) break;
+      CALL_CB(cb_message_registration_error_ack, (struct MessageRegistrationErrorAck*)msg, fd)
+      break;
+    case MESSAGE_PEER_SELECT_TYPE:
+      if (msg->length < 10) break;
+      struct MessagePeerSelect* msg_peer_select = (struct MessagePeerSelect*)msg;
+      msg_peer_select->address = ntohl(msg_peer_select->address);
+      msg_peer_select->port = ntohs(msg_peer_select->port);
+      CALL_CB(cb_message_peer_select, msg_peer_select, fd)
+      break;
+    case MESSAGE_PEER_SELECT_ACK_TYPE:
+      if(msg->length != 0) break;
+      CALL_CB(cb_message_peer_select_ack, (struct MessagePeerSelectAck*)msg, fd)
+      break;
+    default:
+      send_error_message(ERROR_CODE_UNKNOWN_TYPE, "Unkown message type", fd);
+      break;
+  }
+
+  free(msg);
+}
+
 
 void handle_tcp_message(void* arg) {
   assert(arg != NULL);
@@ -102,8 +174,8 @@ void handle_udp_message(void* arg) {
     return;
   }
 
-  if (recv_size < 32) {
-    fprintf(stderr, "Message size %ld smaller than minimum %lu\n", recv_size, 32);
+  if (recv_size < 4) {
+    fprintf(stderr, "Message size %ld smaller than minimum %d\n", recv_size, 4);
     return;
   }
 
@@ -111,7 +183,7 @@ void handle_udp_message(void* arg) {
   uint16_t type = ntohs(message->type);
   uint16_t length = ntohs(message->length);
 
-  size_t expected_size = 32 + length;
+  size_t expected_size = 4 + length;
   size_t expected_size_padded = padded_message_size((int) expected_size);
   if (recv_size != expected_size_padded) {
     fprintf(stderr, "Message size %ld does not match length %lu\n", recv_size, expected_size_padded);
@@ -124,95 +196,6 @@ void handle_udp_message(void* arg) {
   msg_converted->type = type;
   msg_converted->length = length;
   handle_incoming_message(msg_converted, fd);
-}
-
-void handle_incoming_message(struct MessageAny* msg, int fd) {
-  switch (msg->type) {
-    case MESSAGE_COLUMN_TYPE:
-      assert(g_cb_message_column != NULL);
-      if (msg->length != 6) {
-        fprintf(stderr, "Invalid MESSAGE_COLUMN_TYPE length %u\n", msg->length);
-        break;
-      }
-      struct MessageColumn* msg_column = (struct MessageColumn*)msg;
-      msg_column->column = ntohs(msg_column->column);
-      msg_column->sequence = ntohl(msg_column->sequence);
-      g_cb_message_column(msg_column, fd);
-      break;
-    case MESSAGE_COLUMN_ACK_TYPE:
-      assert(g_cb_message_column_ack != NULL);
-      if (msg->length != 4) {
-        fprintf(stderr, "Invalid MESSAGE_COLUMN_ACK_TYPE length %u\n", msg->length);
-        break;
-      }
-      struct MessageColumnAck* msg_column_ack = (struct MessageColumnAck*)msg;
-      msg_column_ack->sequence = ntohl(msg_column_ack->sequence);
-      g_cb_message_column_ack(msg_column_ack, fd);
-      break;
-    case MESSAGE_HEARTBEAT_TYPE:
-      assert(g_cb_message_heartbeat != NULL);
-      g_cb_message_heartbeat((struct MessageHeartbeat*)msg, fd);
-      break;
-    case MESSAGE_HEARTBEAT_ACK_TYPE:
-      assert(g_cb_message_heartbeat_ack != NULL);
-      g_cb_message_heartbeat_ack((struct MessageHeartbeat*)msg, fd);
-      break;
-    case MESSAGE_ERROR_TYPE:
-      assert(g_cb_message_error != NULL);
-      if (msg->length < 4) {
-        fprintf(stderr, "Invalid MESSAGE_ERROR_TYPE length %u\n", msg->length);
-        break;
-      }
-      struct MessageError* msg_error = (struct MessageError*)msg;
-      msg_error->error_code = ntohl(msg_error->error_code);
-      g_cb_message_error(msg_error, fd);
-      break;
-    case MESSAGE_REGISTRATION_TYPE:
-      assert(g_cb_message_registration != NULL);
-      if (msg->length < 10) {
-        fprintf(stderr, "Invalid MESSAGE_ERROR_TYPE length %u\n", msg->length);
-        break;
-      }
-      struct MessageRegistration* msg_reg = (struct MessageRegistration*)msg;
-      msg_reg->address = ntohl(msg_reg->address);
-      msg_reg->port = ntohs(msg_reg->port);
-      msg_reg->name_len = ntohs(msg_reg->name_len);
-      msg_reg->pass_len = ntohs(msg_reg->pass_len);
-      if (msg->length != 10 + msg_reg->name_len + msg_reg->pass_len) {
-        fprintf(stderr, "Invalid MESSAGE_ERROR_TYPE length %u\n", msg->length);
-        break;
-      }
-      g_cb_message_registration(msg_reg, fd);
-      break;
-    case MESSAGE_REGISTRATION_ACK_TYPE:
-      assert(g_cb_message_registration_ack != NULL);
-      g_cb_message_registration_ack((struct MessageRegistrationAck*)msg, fd);
-      break;
-    case MESSAGE_REGISTRATION_ERR_ACK_TYPE:
-      assert(g_cb_message_registration_error_ack != NULL);
-      g_cb_message_registration_error_ack((struct MessageRegistrationErrorAck*)msg, fd);
-      break;
-    case MESSAGE_PEER_SELECT_TYPE:
-      assert(g_cb_message_peer_select != NULL);
-      if (msg->length < 10) {
-        fprintf(stderr, "Invalid MESSAGE_ERROR_TYPE length %u\n", msg->length);
-        break;
-      }
-      struct MessagePeerSelect* msg_peer_select = (struct MessagePeerSelect*)msg;
-      msg_peer_select->address = ntohl(msg_peer_select->address);
-      msg_peer_select->port = ntohs(msg_peer_select->port);
-      g_cb_message_peer_select(msg_peer_select, fd);
-      break;
-    case MESSAGE_PEER_SELECT_ACK_TYPE:
-      assert(g_cb_message_peer_select_ack != NULL);
-      g_cb_message_peer_select_ack((struct MessagePeerSelectAck*)msg, fd);
-      break;
-    default:
-      fprintf(stderr, "Unknown message type %u\n", msg->type);
-      break;
-  }
-
-  free(msg);
 }
 
 void send_message(struct MessageAny* msg, int socket_fd) {
@@ -260,4 +243,16 @@ void send_message(struct MessageAny* msg, int socket_fd) {
     perror("send");
   }
   free(buffer);
+}
+
+void send_error_message(const uint32_t error_code, const char* error_string, int fd) {
+    const size_t err_string_size = strlen(error_string);
+    const size_t message_size = sizeof(struct MessageError) + err_string_size;
+    struct MessageError *msg = malloc(message_size);
+    msg->type = MESSAGE_ERROR_TYPE;
+    msg->length = err_string_size + 4;
+    msg->error_code = error_code;
+    memcpy(msg->data, error_string, err_string_size);
+    send_message((struct MessageAny*) msg, fd);
+    free(msg);
 }

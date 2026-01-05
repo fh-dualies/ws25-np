@@ -71,6 +71,10 @@ void connect_clients(struct ConnectionInfo* conn_a, struct ConnectionInfo* conn_
   send_message(conn_a_msg, conn_b->handle_message_params.fd);
   send_message(conn_b_msg, conn_a->handle_message_params.fd);
 
+  // We are done. Just shutdown connection
+  shutdown(conn_a->handle_message_params.fd, SHUT_WR);
+  shutdown(conn_b->handle_message_params.fd, SHUT_WR);
+
   conn_a->conn_send = 1;
   conn_b->conn_send = 1;
 
@@ -131,6 +135,15 @@ int on_peer_select_ack(struct MessagePeerSelectAck* msg, int fd) {
   close_connection(fd);
 }
 
+void on_heartbeat_message(struct MessageHeartbeat* msg, int fd) {
+    msg->type = MESSAGE_HEARTBEAT_ACK_TYPE;
+    send_message((struct MessageAny *) msg, fd);
+}
+
+void on_default(struct MessageAny* msg, int fd) {
+  send_error_message(ERROR_CODE_PROTOCOL_ERROR, "Unsupported message type", fd);
+}
+
 int on_acceptable(void *arg) {
   struct ConnectionInfo* conn = get_conn(-1); // Get any unused connection slot if availabe
   int fd = accept(socket_fd, NULL, NULL);
@@ -152,6 +165,8 @@ int main(int argc, char **argv) {
   cb_tcp_closed(on_tcp_closed);
   cb_message_peer_select_ack(on_peer_select_ack);
   cb_message_registration(on_message_registration);
+  cb_message_heartbeat(on_heartbeat_message);
+  cb_message_default(on_default);
 
   socket_fd = create_tcp_socket();
   if (socket_fd == -1) return 1;
