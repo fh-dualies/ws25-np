@@ -92,10 +92,11 @@ void handle_incoming_message(struct MessageAny* msg, int fd) {
       CALL_CB(cb_message_registration_error_ack, (struct MessageRegistrationErrorAck*)msg, fd)
       break;
     case MESSAGE_PEER_SELECT_TYPE:
-      if (msg->length < 10) break;
+      if (msg->length < 12) break;
       struct MessagePeerSelect* msg_peer_select = (struct MessagePeerSelect*)msg;
       msg_peer_select->address = ntohl(msg_peer_select->address);
       msg_peer_select->port = ntohs(msg_peer_select->port);
+      msg_peer_select->start = ntohs(msg_peer_select->start);
       CALL_CB(cb_message_peer_select, msg_peer_select, fd)
       break;
     case MESSAGE_PEER_SELECT_ACK_TYPE:
@@ -133,12 +134,12 @@ void handle_tcp_message(void* arg) {
 
   buffer->filled_size += recv_size;
 
-  while (buffer->filled_size >= 32) {
+  while (buffer->filled_size >= 4) {
     struct MessageAny* message = (struct MessageAny*)buffer->data;
     uint16_t type = ntohs(message->type);
     uint16_t length = ntohs(message->length);
 
-    size_t expected_size = 32 + length;
+    size_t expected_size = 4 + length;
     size_t expected_size_padded = padded_message_size((int) expected_size);
 
     if (buffer->filled_size < expected_size_padded) {
@@ -234,6 +235,7 @@ void send_message(struct MessageAny* msg, int socket_fd) {
       struct MessagePeerSelect *msg_peer_select = (struct MessagePeerSelect *) buffer;
       msg_peer_select->address = htonl(msg_peer_select->address);
       msg_peer_select->port = htons(msg_peer_select->port);
+      msg_peer_select->start = htons(msg_peer_select->start);
     } break;
     default:
       break;

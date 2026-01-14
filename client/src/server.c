@@ -1,10 +1,17 @@
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "../src/socket_util.h"
 #include "../src/protocol.h"
 #include "../lib/cblib.h"
 
 #define MAX_NAME_LEN 1 << 16
+#define CONNECTION_COUNT 2
 
 int socket_fd = -1;
 
@@ -21,13 +28,13 @@ struct ConnectionInfo {
 HANDLE_MESSAGE_BUFFER_DEFINITION(conn_1_buffer, 1<<16)
 HANDLE_MESSAGE_BUFFER_DEFINITION(conn_2_buffer, 1<<16)
 
-struct ConnectionInfo connections[2] = {
+struct ConnectionInfo connections[CONNECTION_COUNT] = {
   {
     .registered = 0,
     .address = 0,
     .port = 0,
     .name_len = 0,
-    .name = NULL,
+    .name = { '\0' },
     .conn_send = 0,
     .handle_message_params.fd = -1,
     .handle_message_params.buffer = &conn_1_buffer,
@@ -36,7 +43,7 @@ struct ConnectionInfo connections[2] = {
     .registered = 0,
     .port = 0,
     .name_len = 0,
-    .name = NULL,
+    .name = { '\0' },
     .conn_send = 0,
     .handle_message_params.fd = -1,
     .handle_message_params.buffer = &conn_2_buffer,
@@ -44,7 +51,7 @@ struct ConnectionInfo connections[2] = {
 };
 
 struct ConnectionInfo* get_conn(int fd) {
-  for (size_t i = 0; i < sizeof(connections); i++) {
+  for (size_t i = 0; i < CONNECTION_COUNT; i++) {
     if(connections[i].handle_message_params.fd == fd) return &connections[i];
   }
   return NULL;
@@ -68,8 +75,8 @@ void connect_clients(struct ConnectionInfo* conn_a, struct ConnectionInfo* conn_
   struct MessagePeerSelect* conn_a_msg = peer_select_msg(conn_a);
   struct MessagePeerSelect* conn_b_msg = peer_select_msg(conn_b);
 
-  send_message(conn_a_msg, conn_b->handle_message_params.fd);
-  send_message(conn_b_msg, conn_a->handle_message_params.fd);
+  send_message((struct MessageAny *) conn_a_msg, conn_b->handle_message_params.fd);
+  send_message((struct MessageAny *) conn_b_msg, conn_a->handle_message_params.fd);
 
   // We are done. Just shutdown connection
   shutdown(conn_a->handle_message_params.fd, SHUT_WR);
@@ -82,7 +89,7 @@ void connect_clients(struct ConnectionInfo* conn_a, struct ConnectionInfo* conn_
   free(conn_b_msg);
 }
 
-int on_message_registration(struct MessageRegistration* msg, int fd) {
+void on_message_registration(struct MessageRegistration* msg, int fd) {
   struct ConnectionInfo* conn = get_conn(fd);
   if (conn == NULL) return;
   if (conn->registered == 1) return; // already registered
@@ -97,7 +104,7 @@ int on_message_registration(struct MessageRegistration* msg, int fd) {
       .type = MESSAGE_REGISTRATION_ERR_ACK_TYPE,
       .length = 0
     };
-    send_message(&response, fd);
+    send_message((struct MessageAny *) &response, fd);
     return;
   }
  
@@ -110,7 +117,7 @@ int on_message_registration(struct MessageRegistration* msg, int fd) {
     .type = MESSAGE_REGISTRATION_ACK_TYPE,
     .length = 0
   };
-  send_message(&response, fd);
+  send_message((struct MessageAny *) &response, fd);
 
   // TODO: more than 2 fixed connections
   connect_clients(&connections[0], &connections[1]);
@@ -127,11 +134,11 @@ void close_connection(int fd) {
   close(fd);
 }
 
-int on_tcp_closed(void* args, int fd) {
+void on_tcp_closed(void* args, int fd) {
   close_connection(fd);
 }
 
-int on_peer_select_ack(struct MessagePeerSelectAck* msg, int fd) {
+void on_peer_select_ack(struct MessagePeerSelectAck* msg, int fd) {
   close_connection(fd);
 }
 
@@ -144,7 +151,7 @@ void on_default(struct MessageAny* msg, int fd) {
   send_error_message(ERROR_CODE_PROTOCOL_ERROR, "Unsupported message type", fd);
 }
 
-int on_acceptable(void *arg) {
+void on_acceptable(void *arg) {
   struct ConnectionInfo* conn = get_conn(-1); // Get any unused connection slot if availabe
   int fd = accept(socket_fd, NULL, NULL);
   if (fd == -1) return;

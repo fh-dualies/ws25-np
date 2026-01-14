@@ -78,6 +78,7 @@ struct MessagePeerSelect {
     uint16_t length;
     uint32_t address;
     uint16_t port;
+    uint16_t start;
     uint8_t name[];
 };
 
@@ -124,6 +125,8 @@ void cb_message_registration_error_ack(void (*callback)(struct MessageRegistrati
 void cb_message_peer_select(void (*callback)(struct MessagePeerSelect* msg, int fd));
 
 void cb_message_peer_select_ack(void (*callback)(struct MessagePeerSelectAck* msg, int fd));
+
+void cb_message_default(void (*callback)(struct MessageAny* msg, int fd));
 
 void cb_tcp_closed(void (*callback)(void* args, int fd));
 
