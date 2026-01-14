@@ -57,13 +57,14 @@ struct ConnectionInfo* get_conn(int fd) {
   return NULL;
 }
 
-struct MessagePeerSelect* peer_select_msg(struct ConnectionInfo* conn_info) {
-  size_t msg_size = 10 + conn_info->name_len;
-  struct MessagePeerSelect* msg = malloc(msg_size);
+struct MessagePeerSelect* peer_select_msg(struct ConnectionInfo* conn_info, uint16_t start) {
+  size_t msg_size = 8 + conn_info->name_len;
+  struct MessagePeerSelect* msg = malloc(msg_size + 4);
   msg->type = MESSAGE_PEER_SELECT_TYPE;
   msg->length = msg_size;
   msg->address = conn_info->address;
   msg->port = conn_info->port;
+  msg->start = start;
   memcpy(msg->name, conn_info->name, conn_info->name_len);
   return msg;
 }
@@ -72,8 +73,8 @@ void connect_clients(struct ConnectionInfo* conn_a, struct ConnectionInfo* conn_
   if (conn_a->registered != 1 || conn_b->registered != 1) return;
   if (conn_a->conn_send == 1 || conn_b->conn_send == 1) return;
 
-  struct MessagePeerSelect* conn_a_msg = peer_select_msg(conn_a);
-  struct MessagePeerSelect* conn_b_msg = peer_select_msg(conn_b);
+  struct MessagePeerSelect* conn_a_msg = peer_select_msg(conn_a, 0);
+  struct MessagePeerSelect* conn_b_msg = peer_select_msg(conn_b, 1);
 
   send_message((struct MessageAny *) conn_a_msg, conn_b->handle_message_params.fd);
   send_message((struct MessageAny *) conn_b_msg, conn_a->handle_message_params.fd);
@@ -105,12 +106,14 @@ void on_message_registration(struct MessageRegistration* msg, int fd) {
       .length = 0
     };
     send_message((struct MessageAny *) &response, fd);
+    puts("REJECT SEND");
     return;
   }
  
   conn->registered = 1;
   conn->address = msg->address;
   conn->port = msg->port;
+  conn->name_len = msg->name_len;
   memcpy(conn->name, msg->data, msg->name_len);
 
   struct MessageRegistrationAck response = {
@@ -118,6 +121,7 @@ void on_message_registration(struct MessageRegistration* msg, int fd) {
     .length = 0
   };
   send_message((struct MessageAny *) &response, fd);
+  puts("ACCEPT SEND");
 
   // TODO: more than 2 fixed connections
   connect_clients(&connections[0], &connections[1]);

@@ -47,6 +47,7 @@ int padded_message_size(int size) {
 }
 
 void handle_incoming_message(struct MessageAny* msg, int fd) {
+  printf("RECV: type: %d length: %d\n", msg->type, msg->length);
   switch (msg->type) {
     case MESSAGE_COLUMN_TYPE:
       if (msg->length != 6) break;
@@ -200,6 +201,8 @@ void handle_udp_message(void* arg) {
 }
 
 void send_message(struct MessageAny* msg, int socket_fd) {
+  printf("SEND: type -> %d, length -> %d\n", msg->type, 4 + msg->length);
+
   assert(msg != NULL);
   uint16_t message_size = 4 + msg->length;
   size_t padded_size = padded_message_size(message_size);
@@ -236,6 +239,7 @@ void send_message(struct MessageAny* msg, int socket_fd) {
       msg_peer_select->address = htonl(msg_peer_select->address);
       msg_peer_select->port = htons(msg_peer_select->port);
       msg_peer_select->start = htons(msg_peer_select->start);
+      printf("SEND_NAME:  %s\n", msg_peer_select->name);
     } break;
     default:
       break;
